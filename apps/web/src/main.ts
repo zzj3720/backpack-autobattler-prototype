@@ -380,7 +380,7 @@ function drawBackpack(hoveredItem: ItemSnapshot | null): void {
     text(item.def.name.slice(0, 3), px + CELL / 2 - 2, py + CELL - 21, 10, "#ffe6aa", "center");
   }
 
-  drawPlayerStatusPanel(42, 456, 330, 226);
+  drawPlayerStatusPanel(42, 432, 330, 250);
 }
 
 function drawItemLinkHighlights(item: ItemSnapshot): void {
@@ -1138,7 +1138,7 @@ function drawCellEmptyState(x: number, y: number): void {
 function drawPlayerStatusPanel(x: number, y: number, w: number, h: number): void {
   const stats = snapshot.player.stats;
   drawNinePatch(uiSprites.tooltipParchment, x, y, w, h, 44);
-  const inset = 54;
+  const inset = 58;
 
   text(
     "英雄状态",
@@ -1160,8 +1160,8 @@ function drawPlayerStatusPanel(x: number, y: number, w: number, h: number): void
     undefined,
     "#f2d99b",
   );
-  drawBar(x + inset, y + 82, w - inset * 2, 8, snapshot.player.hp / stats.maxHp, "#63d990");
-  drawDivider(x + inset, y + 100, w - inset * 2);
+  drawBar(x + inset, y + 76, w - inset * 2, 8, snapshot.player.hp / stats.maxHp, "#63d990");
+  drawDivider(x + inset, y + 91, w - inset * 2);
 
   const rows = [
     ["攻击", fmt(stats.attack), "攻速", fmt(stats.attackSpeed)],
@@ -1170,17 +1170,17 @@ function drawPlayerStatusPanel(x: number, y: number, w: number, h: number): void
     ["反伤", fmt(stats.thorns), "暴击", `${Math.round(stats.critChance * 100)}%`],
   ] as const;
 
-  let cursorY = y + 112;
+  let cursorY = y + 103;
   for (const [leftLabel, leftValue, rightLabel, rightValue] of rows) {
-    drawCompactStat(x + inset, cursorY, 96, leftLabel, leftValue);
-    drawCompactStat(x + inset + 126, cursorY, 96, rightLabel, rightValue);
-    cursorY += 24;
+    drawCompactStat(x + inset, cursorY, 90, leftLabel, leftValue);
+    drawCompactStat(x + inset + 124, cursorY, 90, rightLabel, rightValue);
+    cursorY += 21;
   }
 }
 
 function drawCompactStat(x: number, y: number, w: number, label: string, value: string): void {
-  text(label, x, y + 2, 13, "#3a1a0a", "left", undefined, "#f2d99b");
-  text(value, x + w, y + 2, 14, "#140904", "right", undefined, "#f2d99b");
+  text(label, x, y + 2, 12, "#3a1a0a", "left", undefined, "#f2d99b");
+  text(value, x + w, y + 2, 13, "#140904", "right", undefined, "#f2d99b");
 }
 
 function drawStatChip(x: number, y: number, w: number, label: string, value: string): void {
