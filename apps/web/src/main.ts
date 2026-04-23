@@ -380,7 +380,7 @@ function drawBackpack(hoveredItem: ItemSnapshot | null): void {
     text(item.def.name.slice(0, 3), px + CELL / 2 - 2, py + CELL - 21, 10, "#ffe6aa", "center");
   }
 
-  drawPlayerStatusPanel(56, 500, 264, 166);
+  drawPlayerStatusPanel(42, 478, 306, 198);
 }
 
 function drawItemLinkHighlights(item: ItemSnapshot): void {
@@ -1121,19 +1121,20 @@ function drawCellEmptyState(x: number, y: number): void {
 function drawPlayerStatusPanel(x: number, y: number, w: number, h: number): void {
   const stats = snapshot.player.stats;
   drawNinePatch(uiSprites.tooltipParchment, x, y, w, h, 44);
-  ctx.fillStyle = "rgba(53, 28, 12, 0.16)";
-  roundRect(x + 17, y + 17, w - 34, h - 34, 8, true);
+  const inset = 28;
+  ctx.fillStyle = "rgba(247, 220, 158, 0.52)";
+  roundRect(x + inset, y + 22, w - inset * 2, h - 48, 8, true);
 
-  text("英雄状态", x + 24, y + 20, 17, "#2b160b", "left", '"Songti SC", Georgia, serif');
+  text("英雄状态", x + inset + 2, y + 27, 18, "#2b160b", "left", '"Songti SC", Georgia, serif');
   text(
     `${Math.ceil(snapshot.player.hp)}/${Math.ceil(stats.maxHp)}`,
-    x + w - 28,
-    y + 22,
+    x + w - inset - 2,
+    y + 29,
     14,
     "#59320f",
     "right",
   );
-  drawBar(x + 24, y + 48, w - 48, 8, snapshot.player.hp / stats.maxHp, "#63d990");
+  drawBar(x + inset + 2, y + 58, w - inset * 2 - 4, 8, snapshot.player.hp / stats.maxHp, "#63d990");
 
   const rows = [
     ["攻击", fmt(stats.attack), "攻速", fmt(stats.attackSpeed)],
@@ -1142,19 +1143,19 @@ function drawPlayerStatusPanel(x: number, y: number, w: number, h: number): void
     ["反伤", fmt(stats.thorns), "暴击", `${Math.round(stats.critChance * 100)}%`],
   ] as const;
 
-  let cursorY = y + 67;
+  let cursorY = y + 78;
   for (const [leftLabel, leftValue, rightLabel, rightValue] of rows) {
-    drawCompactStat(x + 24, cursorY, 98, leftLabel, leftValue);
-    drawCompactStat(x + 138, cursorY, 98, rightLabel, rightValue);
-    cursorY += 24;
+    drawCompactStat(x + inset + 2, cursorY, 112, leftLabel, leftValue);
+    drawCompactStat(x + inset + 134, cursorY, 112, rightLabel, rightValue);
+    cursorY += 27;
   }
 }
 
 function drawCompactStat(x: number, y: number, w: number, label: string, value: string): void {
   ctx.fillStyle = "rgba(34, 18, 9, 0.56)";
-  roundRect(x, y, w, 20, 5, true);
-  text(label, x + 8, y + 4, 11, "#d6b577");
-  text(value, x + w - 8, y + 4, 12, "#ffe2a5", "right");
+  roundRect(x, y, w, 22, 5, true);
+  text(label, x + 9, y + 5, 12, "#d6b577");
+  text(value, x + w - 9, y + 5, 13, "#ffe2a5", "right");
 }
 
 function drawStatChip(x: number, y: number, w: number, label: string, value: string): void {
