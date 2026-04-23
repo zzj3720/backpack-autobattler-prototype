@@ -52,6 +52,23 @@ const statLabel: Record<keyof Stats, string> = {
   critChance: "暴击",
 };
 
+const tagLabel: Record<string, string> = {
+  weapon: "武器",
+  metal: "金属",
+  shield: "盾牌",
+  wood: "木质",
+  poison: "毒系",
+  alchemy: "炼金",
+  fire: "火系",
+  stone: "石质",
+  trinket: "饰品",
+  machine: "机械",
+  nature: "自然",
+  sound: "声响",
+  glass: "玻璃",
+  curse: "诅咒",
+};
+
 const spriteBase = "/assets/sprites";
 const itemSprites: Record<string, string> = {
   rusty_blade: `${spriteBase}/items/rusty_blade.png`,
@@ -363,8 +380,7 @@ function drawBackpack(hoveredItem: ItemSnapshot | null): void {
     text(item.def.name.slice(0, 3), px + CELL / 2 - 2, py + CELL - 21, 10, "#ffe6aa", "center");
   }
 
-  const stats = snapshot.player.stats;
-  drawStatLedger(72, 506, 178, 158, formatStats(stats));
+  drawPlayerStatusPanel(56, 500, 264, 166);
 }
 
 function drawItemLinkHighlights(item: ItemSnapshot): void {
@@ -588,72 +604,104 @@ function drawResultCard(): void {
 }
 
 function drawItemTooltip(item: ItemSnapshot): void {
-  const lines = tooltipLines(item);
-  const w = 360;
-  const descHeight = measureWrappedTextHeight(item.def.description, w - 28, 17, 12);
-  const lineHeights = lines.map((lineText) => measureWrappedTextHeight(lineText, w - 28, 19, 12));
-  const h =
-    78 + descHeight + 12 + lineHeights.reduce((sum, lineHeight) => sum + lineHeight, 0) + 14;
-  const x = Math.min(WIDTH - w - 24, Math.max(40, pointer.x + 24));
-  const y = Math.min(HEIGHT - 24 - h, Math.max(72, pointer.y + 18));
+  const statEntries = statPairs(item.stats).slice(0, 6);
+  const effectRows = tooltipEffectRows(item);
+  const w = 410;
+  const innerX = 24;
+  const innerW = w - innerX * 2;
+  const descHeight = measureWrappedTextHeight(item.def.description, innerW, 18, 13);
+  const statRows = Math.ceil(statEntries.length / 2);
+  const effectHeight = Math.max(28, effectRows.length * 30);
+  const h = 98 + descHeight + 12 + 22 + Math.max(1, statRows) * 30 + 12 + 20 + effectHeight + 42;
+  const preferredX = pointer.x + 34;
+  const x = preferredX + w <= WIDTH - 24 ? preferredX : pointer.x - w - 34;
+  const y = Math.min(HEIGHT - 24 - h, Math.max(78, pointer.y - 86));
 
   drawNinePatch(uiSprites.tooltipParchment, x, y, w, h, 44);
 
-  ctx.fillStyle = "rgba(7, 10, 10, 0.74)";
-  roundRect(x + 14, y + 14, 54, 54, 6, true);
-  drawSprite(itemSprites[item.def.id], x + 17, y + 17, 48, 48, 5);
-  text(item.def.name, x + 78, y + 14, 17, "#3b2413");
+  ctx.fillStyle = "rgba(247, 220, 158, 0.52)";
+  roundRect(x + 20, y + 18, w - 40, h - 38, 8, true);
+
+  ctx.fillStyle = "rgba(15, 10, 7, 0.72)";
+  roundRect(x + 24, y + 22, 62, 62, 7, true);
+  drawSprite(itemSprites[item.def.id], x + 29, y + 27, 52, 52, 5);
+  text(item.def.name, x + 100, y + 22, 20, "#2b160b", "left", '"Songti SC", Georgia, serif');
   text(
-    `${rarityLabel[item.def.rarity]} | ${item.def.tags.join(" / ")}`,
-    x + 78,
-    y + 39,
-    12,
-    "#5e4024",
+    `${rarityLabel[item.def.rarity]} | ${item.def.tags.map(formatTag).join(" / ")}`,
+    x + 100,
+    y + 52,
+    13,
+    "#68411e",
   );
   const descriptionHeight = wrapText(
     item.def.description,
-    x + 14,
-    y + 78,
-    w - 28,
-    17,
-    12,
-    "#3f3020",
+    x + innerX,
+    y + 98,
+    innerW,
+    18,
+    13,
+    "#321d11",
   );
 
-  let cursorY = y + 78 + descriptionHeight + 12;
-  for (const lineText of lines) {
-    const active = lineText.startsWith("已触发");
-    cursorY += wrapText(lineText, x + 14, cursorY, w - 28, 19, 12, active ? "#7a2e14" : "#614832");
+  let cursorY = y + 104 + descriptionHeight;
+  drawDivider(x + innerX, cursorY, innerW);
+  cursorY += 12;
+  text("当前贡献", x + innerX, cursorY, 13, "#6a3515");
+  cursorY += 22;
+  for (let index = 0; index < statEntries.length; index += 1) {
+    const column = index % 2;
+    const row = Math.floor(index / 2);
+    drawStatChip(
+      x + innerX + column * 174,
+      cursorY + row * 30,
+      160,
+      statEntries[index]!.label,
+      statEntries[index]!.value,
+    );
+  }
+  cursorY += Math.max(1, statRows) * 30 + 4;
+  drawDivider(x + innerX, cursorY, innerW);
+  cursorY += 12;
+  text("连携状态", x + innerX, cursorY, 13, "#6a3515");
+  cursorY += 20;
+  if (effectRows.length === 0) {
+    text("无连携效果", x + innerX, cursorY, 13, "#5f4631");
+    return;
+  }
+  for (const row of effectRows) {
+    drawEffectRow(x + innerX, cursorY, innerW, row);
+    cursorY += 30;
   }
 }
 
-function tooltipLines(item: ItemSnapshot): string[] {
-  const activeLabels = new Set(item.labels.map((label) => label.split(" (")[0]));
-  const baseStats = statLines(item.stats).slice(0, 4);
-  const effectLines =
-    item.def.effects.length > 0
-      ? item.def.effects.map((effect) => {
-          const active = activeLabels.has(effect.label);
-          const stateLabel = active ? "已触发" : "未触发";
-          return `${stateLabel}：${effectDescription(effect)}`;
-        })
-      : ["无连携效果"];
-  return [...baseStats, ...effectLines].slice(0, 8);
+function statLines(stats: Stats): string[] {
+  return statPairs(stats).map(({ label, value }) => `${label} ${value}`);
 }
 
-function statLines(stats: Stats): string[] {
+function statPairs(stats: Stats): Array<{ label: string; value: string }> {
   return (Object.entries(stats) as Array<[keyof Stats, number]>)
     .filter(([, value]) => Math.abs(value) > 0.001)
-    .map(([stat, value]) => `${statLabel[stat]} ${value > 0 ? "+" : ""}${fmtStat(stat, value)}`);
+    .map(([stat, value]) => ({
+      label: statLabel[stat],
+      value: `${value > 0 ? "+" : ""}${fmtStat(stat, value)}`,
+    }));
+}
+
+function tooltipEffectRows(item: ItemSnapshot): Array<{ active: boolean; description: string }> {
+  const activeLabels = new Set(item.labels.map((label) => label.split(" (")[0]));
+  return item.def.effects.map((effect) => ({
+    active: activeLabels.has(effect.label),
+    description: effectDescription(effect),
+  }));
 }
 
 function effectDescription(effect: EffectDef): string {
   const amount = `${effect.amount > 0 ? "+" : ""}${fmtStat(effect.stat, effect.amount)} ${statLabel[effect.stat]}`;
   switch (effect.type) {
     case "adjacentTag":
-      return `邻接 ${effect.tag} ${amount}`;
+      return `邻接 ${formatTag(effect.tag)} ${amount}`;
     case "sameRowTag":
-      return `同行 ${effect.tag} ${amount}`;
+      return `同行 ${formatTag(effect.tag)} ${amount}`;
     case "corner":
       return `放在角落 ${amount}`;
     case "emptyNeighbor":
@@ -661,6 +709,10 @@ function effectDescription(effect: EffectDef): string {
     case "lowHp":
       return `生命低于 ${Math.round(effect.threshold * 100)}% ${amount}`;
   }
+}
+
+function formatTag(tag: string): string {
+  return tagLabel[tag] ?? tag;
 }
 
 function effectTargetCells(
@@ -991,16 +1043,6 @@ function wrapLines(value: string, maxWidth: number, size: number): string[] {
   });
 }
 
-function formatStats(stats: Stats): string {
-  return [
-    `生命 ${Math.ceil(snapshot.player.hp)}/${Math.ceil(stats.maxHp)}`,
-    `攻击 ${fmt(stats.attack)}  攻速 ${fmt(stats.attackSpeed)}`,
-    `护甲 ${fmt(stats.armor)}  回复 ${fmt(stats.regen)}`,
-    `燃烧 ${fmt(stats.burn)}  毒 ${fmt(stats.poison)}  反伤 ${fmt(stats.thorns)}`,
-    `暴击 ${Math.round(stats.critChance * 100)}%`,
-  ].join("\n");
-}
-
 function phaseLabel(): string {
   if (snapshot.phase === "battle") {
     return paused ? "沙漏凝住" : "队伍自动交锋";
@@ -1076,10 +1118,70 @@ function drawCellEmptyState(x: number, y: number): void {
   ctx.restore();
 }
 
-function drawStatLedger(x: number, y: number, w: number, h: number, value: string): void {
-  drawNinePatch(uiSprites.battleLedger, x, y, w, h, 34);
-  text("英雄刻度", x + 14, y + 12, 14, "#3b2413");
-  wrapText(value, x + 14, y + 36, w - 28, 18, 14, "#4b3827");
+function drawPlayerStatusPanel(x: number, y: number, w: number, h: number): void {
+  const stats = snapshot.player.stats;
+  drawNinePatch(uiSprites.tooltipParchment, x, y, w, h, 44);
+  ctx.fillStyle = "rgba(53, 28, 12, 0.16)";
+  roundRect(x + 17, y + 17, w - 34, h - 34, 8, true);
+
+  text("英雄状态", x + 24, y + 20, 17, "#2b160b", "left", '"Songti SC", Georgia, serif');
+  text(
+    `${Math.ceil(snapshot.player.hp)}/${Math.ceil(stats.maxHp)}`,
+    x + w - 28,
+    y + 22,
+    14,
+    "#59320f",
+    "right",
+  );
+  drawBar(x + 24, y + 48, w - 48, 8, snapshot.player.hp / stats.maxHp, "#63d990");
+
+  const rows = [
+    ["攻击", fmt(stats.attack), "攻速", fmt(stats.attackSpeed)],
+    ["护甲", fmt(stats.armor), "回复", fmt(stats.regen)],
+    ["燃烧", fmt(stats.burn), "毒", fmt(stats.poison)],
+    ["反伤", fmt(stats.thorns), "暴击", `${Math.round(stats.critChance * 100)}%`],
+  ] as const;
+
+  let cursorY = y + 67;
+  for (const [leftLabel, leftValue, rightLabel, rightValue] of rows) {
+    drawCompactStat(x + 24, cursorY, 98, leftLabel, leftValue);
+    drawCompactStat(x + 138, cursorY, 98, rightLabel, rightValue);
+    cursorY += 24;
+  }
+}
+
+function drawCompactStat(x: number, y: number, w: number, label: string, value: string): void {
+  ctx.fillStyle = "rgba(34, 18, 9, 0.56)";
+  roundRect(x, y, w, 20, 5, true);
+  text(label, x + 8, y + 4, 11, "#d6b577");
+  text(value, x + w - 8, y + 4, 12, "#ffe2a5", "right");
+}
+
+function drawStatChip(x: number, y: number, w: number, label: string, value: string): void {
+  ctx.fillStyle = "rgba(38, 20, 10, 0.68)";
+  roundRect(x, y, w, 23, 5, true);
+  text(label, x + 9, y + 5, 12, "#e0c28a");
+  text(value, x + w - 9, y + 5, 12, "#ffe6aa", "right");
+}
+
+function drawDivider(x: number, y: number, w: number): void {
+  ctx.strokeStyle = "rgba(92, 52, 22, 0.34)";
+  ctx.lineWidth = 1;
+  line(x, y, x + w, y);
+}
+
+function drawEffectRow(
+  x: number,
+  y: number,
+  w: number,
+  row: { active: boolean; description: string },
+): void {
+  ctx.fillStyle = "rgba(250, 224, 160, 0.38)";
+  roundRect(x, y, w, 25, 5, true);
+  ctx.fillStyle = row.active ? "rgba(122, 46, 20, 0.82)" : "rgba(70, 55, 39, 0.72)";
+  roundRect(x + 7, y + 4, 56, 17, 4, true);
+  text(row.active ? "已触发" : "未触发", x + 35, y + 5, 11, "#ffe4aa", "center");
+  text(row.description, x + 74, y + 5, 12, "#2f1a0d");
 }
 
 function roundRect(x: number, y: number, w: number, h: number, r: number, fill: boolean): void {
