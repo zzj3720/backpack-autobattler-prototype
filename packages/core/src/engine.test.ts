@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { computeBuild, createGame, dispatchCommand, querySnapshot, tickGame } from "./index.ts";
+import {
+  computeBuild,
+  createGame,
+  defaultContent,
+  dispatchCommand,
+  querySnapshot,
+  tickGame,
+} from "./index.ts";
 
 function runScript(seed: string) {
   let state = createGame(seed);
@@ -49,5 +56,27 @@ describe("backpack core", () => {
     assert.equal(state.phase, "draft");
     assert.equal(state.waveIndex, 1);
     assert.ok(state.totals.kills > 0);
+  });
+
+  it("defines a three-act campaign with boss checkpoints every five waves", () => {
+    assert.equal(defaultContent.waves.length, 15);
+    assert.deepEqual(
+      defaultContent.waves
+        .map((wave, index) => ({ wave, index }))
+        .filter(({ wave }) => wave.enemies.some((entry) => entry.enemyId.includes("boss")))
+        .map(({ index }) => index + 1),
+      [5, 10, 15],
+    );
+
+    for (let index = 1; index < defaultContent.waves.length; index += 1) {
+      assert.ok(
+        defaultContent.waves[index]!.rewardBias >= defaultContent.waves[index - 1]!.rewardBias,
+      );
+    }
+
+    const firstBoss = defaultContent.enemies.find((enemy) => enemy.id === "boss")!;
+    const finalBoss = defaultContent.enemies.find((enemy) => enemy.id === "boss_core")!;
+    assert.ok(finalBoss.maxHp > firstBoss.maxHp);
+    assert.ok(finalBoss.attack > firstBoss.attack);
   });
 });

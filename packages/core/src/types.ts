@@ -75,6 +75,7 @@ export interface EnemyDef {
   id: string;
   name: string;
   symbol: string;
+  spriteId?: string;
   maxHp: number;
   attack: number;
   attackSpeed: number;

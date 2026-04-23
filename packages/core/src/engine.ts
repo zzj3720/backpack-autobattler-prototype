@@ -584,7 +584,7 @@ function completeWave(state: GameState, content: GameContent): void {
 
   if (state.waveIndex >= content.waves.length - 1) {
     state.phase = "victory";
-    state.endReason = "击败矿心 Boss";
+    state.endReason = `击败 ${waveName}`;
     pushLog(state, `胜利！纹章 ${createShareCode(state)}`);
     return;
   }
