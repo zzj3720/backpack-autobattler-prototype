@@ -26,6 +26,12 @@ vp build
 
 The deployable static site is written to `dist/`.
 
+## Asset Generation
+
+Use the `imagegen` skill for generated bitmap assets. Item rarity should be
+visible in the generated item artwork itself, not only in UI border colors. See
+`docs/asset-generation.md` for the sprite-sheet layout and prompt template.
+
 ## Feedback
 
 Use GitHub Issues for playtest feedback. Good reports include:
