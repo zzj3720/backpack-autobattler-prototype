@@ -131,8 +131,17 @@ const effectsBase = "/assets/effects";
 const uiSprites = {
   bagOpen: `${uiBase}/bag-open.png`,
   bagClosed: `${uiBase}/bag-closed.png`,
+  barPlayerFrame: `${uiBase}/bar-player-frame.png`,
+  barEnemyFrame: `${uiBase}/bar-enemy-frame.png`,
+  barPlayerFill: `${uiBase}/bar-player-fill.png`,
+  barEnemyFill: `${uiBase}/bar-enemy-fill.png`,
+  debuffPoison: `${uiBase}/debuff-poison.png`,
+  debuffBurn: `${uiBase}/debuff-burn.png`,
   rewardCard: `${uiBase}/reward-card.png`,
   tooltipParchment: `${uiBase}/tooltip-parchment.png`,
+  panelItemTooltip: `${uiBase}/panel-item-tooltip.png`,
+  panelHeroStatus: `${uiBase}/panel-hero-status.png`,
+  panelResult: `${uiBase}/panel-result.png`,
   buttonNormal: `${uiBase}/button-normal.png`,
   buttonPressed: `${uiBase}/button-pressed.png`,
   buttonDisabled: `${uiBase}/button-disabled.png`,
@@ -205,6 +214,40 @@ interface StripBoundsCacheEntry {
 
 const stripBoundsCache = new Map<string, StripBoundsCacheEntry>();
 let backgroundLayerCache: HTMLCanvasElement | null = null;
+const barThemes: Record<BarThemeName, BarTheme> = {
+  player: {
+    framePath: uiSprites.barPlayerFrame,
+    fillPath: uiSprites.barPlayerFill,
+    frameCropHeight: 266,
+    frameLeftCap: 184,
+    frameCenterX: 250,
+    frameCenterWidth: 92,
+    frameRightCapX: 412,
+    fillLeft: 80,
+    fillTop: 119,
+    fillWidth: 438,
+    fillHeight: 86,
+    troughColor: "rgba(12, 17, 12, 0.88)",
+    sparkColor: "#d0ff8e",
+    glossColor: "rgba(255, 255, 255, 0.58)",
+  },
+  enemy: {
+    framePath: uiSprites.barEnemyFrame,
+    fillPath: uiSprites.barEnemyFill,
+    frameCropHeight: 270,
+    frameLeftCap: 188,
+    frameCenterX: 254,
+    frameCenterWidth: 96,
+    frameRightCapX: 420,
+    fillLeft: 81,
+    fillTop: 120,
+    fillWidth: 443,
+    fillHeight: 84,
+    troughColor: "rgba(18, 10, 10, 0.9)",
+    sparkColor: "#ffb178",
+    glossColor: "rgba(255, 244, 220, 0.46)",
+  },
+};
 
 interface HitZone {
   x: number;
@@ -285,6 +328,50 @@ interface DeferredVisualAction {
   run: () => void;
 }
 
+interface EnemyPoisonState {
+  activeUntil: number;
+  tickFlashUntil: number;
+}
+
+interface EnemyBurnState {
+  activeUntil: number;
+  tickFlashUntil: number;
+}
+
+type BarThemeName = "player" | "enemy";
+
+interface BarTheme {
+  framePath: string;
+  fillPath: string;
+  frameCropHeight: number;
+  frameLeftCap: number;
+  frameCenterX: number;
+  frameCenterWidth: number;
+  frameRightCapX: number;
+  fillLeft: number;
+  fillTop: number;
+  fillWidth: number;
+  fillHeight: number;
+  troughColor: string;
+  sparkColor: string;
+  glossColor: string;
+}
+
+interface BarStatusVisuals {
+  poison?: EnemyPoisonState | null;
+  burn?: EnemyBurnState | null;
+}
+
+interface BarFrameLayout {
+  leftCapW: number;
+  centerW: number;
+  rightCapW: number;
+  railW: number;
+  centerX: number;
+  rightRailX: number;
+  rightCapX: number;
+}
+
 const canvas = document.querySelector<HTMLCanvasElement>("#game");
 if (!canvas) {
   throw new Error("Missing #game canvas.");
@@ -317,6 +404,8 @@ const heroAttackEffects: HeroAttackEffect[] = [];
 const arenaSpriteEffects: AnimatedSpriteEffect[] = [];
 const uiSpriteEffects: AnimatedSpriteEffect[] = [];
 const deferredVisualActions: DeferredVisualAction[] = [];
+const enemyPoisonStates = new Map<string, EnemyPoisonState>();
+const enemyBurnStates = new Map<string, EnemyBurnState>();
 const debugWindow = window as typeof window & {
   __backpackDebug?: () => GameSnapshot;
   __backpackDebugForceResult?: (phase?: "victory" | "defeat") => GameSnapshot;
@@ -510,17 +599,15 @@ function drawBackpack(hoveredItem: ItemSnapshot | null): void {
     if (pulse > 0) {
       drawItemPulse(px - 2, py - 2, CELL - 4, pulse);
     }
-    const frameSprite =
-      item.def.rarity === "rare" || item.def.rarity === "epic"
-        ? uiSprites.frameRare
-        : uiSprites.frameCommon;
-    drawSprite(frameSprite, px - 2, py - 2, CELL - 4, CELL - 4, 0);
     if (hoveredItem?.instance.id === item.instance.id) {
-      ctx.strokeStyle = "#f3d18a";
-      ctx.lineWidth = 3;
-      roundRect(px - 1, py - 1, CELL - 6, CELL - 6, 5, false);
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.globalAlpha = 0.24;
+      ctx.fillStyle = "#f3d18a";
+      roundRect(px + 4, py + 4, CELL - 16, CELL - 16, 10, true);
+      ctx.restore();
     }
-    if (!drawSprite(itemSprites[item.def.id], px + 7, py + 7, CELL - 20, CELL - 20, 5)) {
+    if (!drawSprite(itemSprites[item.def.id], px + 4, py + 4, CELL - 14, CELL - 14, 5)) {
       text(item.def.symbol, px + 27, py + 16, 18, "#fff7d6", "center", "monospace");
     }
     ctx.fillStyle = "rgba(16, 10, 7, 0.78)";
@@ -692,21 +779,27 @@ function drawPlayer(x: number, y: number): void {
       text("HERO", position.x, position.y - 9, 13, "#f7fbff", "center");
     }
   }
-  drawBar(
-    position.x - 64,
-    position.y + 94,
-    128,
-    9,
+  const playerBarW = 190;
+  const barX = position.x - playerBarW / 2;
+  const barY = position.y + 79;
+  drawHealthBar(
+    barX,
+    barY,
+    playerBarW,
+    40,
     snapshot.player.hp / snapshot.player.maxHp,
-    "#5bd48a",
+    "player",
+    now,
   );
   text(
     `${Math.ceil(snapshot.player.hp)} / ${Math.ceil(snapshot.player.maxHp)}`,
     position.x,
-    position.y + 108,
-    12,
-    "#d6c5a1",
+    barY + 18,
+    13,
+    "#f5edd2",
     "center",
+    undefined,
+    "rgba(18, 11, 6, 0.9)",
   );
 }
 function drawEnemies(): void {
@@ -727,6 +820,8 @@ function drawEnemies(): void {
     const spriteId = enemy.def.spriteId ?? enemy.def.id;
     const size = spriteId === "boss" ? 158 : 116;
     const hit = enemyHitEffects.get(enemy.instance.id);
+    const poisonState = enemyPoisonStates.get(enemy.instance.id);
+    const burnState = enemyBurnStates.get(enemy.instance.id);
     const hitAlpha = hit ? Math.max(0, Math.min(1, (hit.until - now) / 240)) : 0;
     const hitBoost = hitAlpha * (hit?.critical ? 12 : 6);
     const groundY = y + size * 0.42;
@@ -736,7 +831,29 @@ function drawEnemies(): void {
     ) {
       text(enemy.def.symbol, x, y - 10, 13, "#fff4df", "center", "monospace");
     }
-    drawBar(x - size / 2, groundY + 8, size, 7, enemy.instance.hp / enemy.def.maxHp, "#cf4e4e");
+    if (poisonState && poisonState.activeUntil > now) {
+      drawEnemyPoisonMotes(x, groundY - size * 0.44, size, poisonState, now);
+    }
+    if (burnState && burnState.activeUntil > now) {
+      drawEnemyBurnMotes(x, groundY - size * 0.38, size, burnState, now);
+    }
+    const enemyBarW = spriteId === "boss" ? 212 : 176;
+    const enemyBarH = spriteId === "boss" ? 38 : 32;
+    const barX = x - enemyBarW / 2;
+    const barY = groundY + 2;
+    drawHealthBar(
+      barX,
+      barY,
+      enemyBarW,
+      enemyBarH,
+      enemy.instance.hp / enemy.def.maxHp,
+      "enemy",
+      now,
+      {
+        poison: poisonState?.activeUntil && poisonState.activeUntil > now ? poisonState : null,
+        burn: burnState?.activeUntil && burnState.activeUntil > now ? burnState : null,
+      },
+    );
   }
 }
 
@@ -996,10 +1113,12 @@ function bumpScreenShake(now: number, strength: number, durationMs: number): voi
 
 function emitDamageVisuals(event: DamageCombatEvent, point: Point, startedAt: number): void {
   const color = damageColor(event.kind, event.critical);
-  enemyHitEffects.set(event.targetId, {
-    until: startedAt + (event.critical ? 360 : 250),
-    critical: event.critical,
-  });
+  if (event.kind === "attack" || event.kind === "thorns") {
+    enemyHitEffects.set(event.targetId, {
+      until: startedAt + (event.critical ? 360 : 250),
+      critical: event.critical,
+    });
+  }
   addFloatingText({
     id: event.id,
     x: point.x + jitter(event.id, 18),
@@ -1012,21 +1131,7 @@ function emitDamageVisuals(event: DamageCombatEvent, point: Point, startedAt: nu
     startedAt,
     durationMs: event.critical ? 850 : 720,
   });
-  if (event.kind === "attack") {
-    addArenaSpriteEffect({
-      id: event.id,
-      strip: effectStrips.hitSpark,
-      x: point.x,
-      y: point.y,
-      startedAt,
-      durationMs: event.critical ? 460 : 380,
-      size: event.critical ? 188 : 154,
-      opacity: 1,
-      rotation: jitter(event.id + 41, Math.PI * 0.42),
-      lift: 0,
-      blendMode: "screen",
-    });
-  } else if (event.kind === "burn" || event.kind === "thorns") {
+  if (event.kind === "thorns") {
     addArenaSpriteEffect({
       id: event.id,
       strip: effectStrips.hitSpark,
@@ -1037,22 +1142,20 @@ function emitDamageVisuals(event: DamageCombatEvent, point: Point, startedAt: nu
       size: event.kind === "burn" ? 148 : 136,
       opacity: 0.9,
       rotation: jitter(event.id + 49, Math.PI * 0.32),
-      lift: event.kind === "burn" ? 8 : 0,
+      lift: 0,
       blendMode: "screen",
     });
+  } else if (event.kind === "burn") {
+    const burnState = enemyBurnStates.get(event.targetId);
+    enemyBurnStates.set(event.targetId, {
+      activeUntil: Math.max(burnState?.activeUntil ?? 0, startedAt + 1450),
+      tickFlashUntil: startedAt + 320,
+    });
   } else if (event.kind === "poison") {
-    addArenaSpriteEffect({
-      id: event.id,
-      strip: effectStrips.poisonPuff,
-      x: point.x,
-      y: point.y + 10,
-      startedAt,
-      durationMs: 680,
-      size: event.critical ? 174 : 152,
-      opacity: 0.96,
-      rotation: jitter(event.id + 57, Math.PI * 0.16),
-      lift: 20,
-      blendMode: "screen",
+    const poisonState = enemyPoisonStates.get(event.targetId);
+    enemyPoisonStates.set(event.targetId, {
+      activeUntil: Math.max(poisonState?.activeUntil ?? 0, startedAt + 1450),
+      tickFlashUntil: startedAt + 320,
     });
   }
   for (const sourceId of event.sourceIds) {
@@ -1192,6 +1295,16 @@ function pruneCombatVisuals(now: number): void {
       itemPulseUntil.delete(id);
     }
   }
+  for (const [id, state] of enemyPoisonStates) {
+    if (state.activeUntil <= now) {
+      enemyPoisonStates.delete(id);
+    }
+  }
+  for (const [id, state] of enemyBurnStates) {
+    if (state.activeUntil <= now) {
+      enemyBurnStates.delete(id);
+    }
+  }
   if (screenShakeUntil <= now) {
     screenShakeStrength = 0;
   }
@@ -1219,6 +1332,8 @@ function clearCombatVisuals(): void {
   uiSpriteEffects.length = 0;
   deferredVisualActions.length = 0;
   enemyHitEffects.clear();
+  enemyPoisonStates.clear();
+  enemyBurnStates.clear();
   itemPulseUntil.clear();
 }
 
@@ -1457,50 +1572,50 @@ function drawResultCard(): void {
   const contentW = w - inset * 2;
   const isVictory = snapshot.phase === "victory";
 
-  drawNinePatch(uiSprites.tooltipParchment, x, y, w, h, 44);
+  drawPanelBackground(uiSprites.panelResult, x, y, w, h);
   text(
     isVictory ? "胜利结算" : "失败结算",
     x + w / 2,
     y + 46,
     22,
-    isVictory ? "#2b3c14" : "#4a180f",
+    isVictory ? "#ffe7a7" : "#ffc2a0",
     "center",
     '"Songti SC", Georgia, serif',
-    "#f2d99b",
+    "rgba(28, 12, 4, 0.9)",
   );
 
   const reason = snapshot.endReason ?? (isVictory ? "远征完成" : "远征中止");
-  wrapText(reason, x + inset, y + 82, contentW, 20, 14, "#241006", "#f2d99b");
+  wrapText(reason, x + inset, y + 82, contentW, 20, 14, "#e4d1ad", "rgba(8, 6, 5, 0.86)");
   drawDivider(x + inset, y + 112, contentW);
   text(
     `击杀 ${snapshot.totals.kills}`,
     x + inset,
     y + 128,
     14,
-    "#3a1a0a",
+    "#f1d59a",
     "left",
     undefined,
-    "#f2d99b",
+    "rgba(8, 6, 5, 0.86)",
   );
   text(
     `伤害 ${Math.round(snapshot.totals.damageDone)}`,
     x + w / 2,
     y + 128,
     14,
-    "#3a1a0a",
+    "#f1d59a",
     "center",
     undefined,
-    "#f2d99b",
+    "rgba(8, 6, 5, 0.86)",
   );
   text(
     `纹章 ${snapshot.shareCode}`,
     x + w - inset,
     y + 128,
     14,
-    "#3a1a0a",
+    "#f1d59a",
     "right",
     undefined,
-    "#f2d99b",
+    "rgba(8, 6, 5, 0.86)",
   );
 }
 
@@ -1518,29 +1633,28 @@ function drawItemTooltip(item: ItemSnapshot): void {
   const x = preferredX + w <= WIDTH - 24 ? preferredX : pointer.x - w - 34;
   const y = Math.min(HEIGHT - 24 - h, Math.max(78, pointer.y - 86));
 
-  drawNinePatch(uiSprites.tooltipParchment, x, y, w, h, 44);
+  drawPanelBackground(uiSprites.panelItemTooltip, x, y, w, h);
 
-  drawSprite(uiSprites.frameCommon, x + innerX, y + 44, 62, 62, 0);
-  drawSprite(itemSprites[item.def.id], x + innerX + 5, y + 49, 52, 52, 5);
+  drawSprite(itemSprites[item.def.id], x + innerX, y + 42, 68, 68, 6);
   text(
     item.def.name,
     x + innerX + 78,
     y + 48,
     20,
-    "#241006",
+    "#ffe6aa",
     "left",
     '"Songti SC", Georgia, serif',
-    "#f2d99b",
+    "rgba(12, 7, 4, 0.9)",
   );
   text(
     `${rarityLabel[item.def.rarity]} | ${item.def.tags.map(formatTag).join(" / ")}`,
     x + innerX + 78,
     y + 78,
     13,
-    "#4f2a12",
+    "#b9c8b5",
     "left",
     undefined,
-    "#f2d99b",
+    "rgba(12, 7, 4, 0.9)",
   );
   const descriptionHeight = wrapText(
     item.def.description,
@@ -1549,14 +1663,14 @@ function drawItemTooltip(item: ItemSnapshot): void {
     innerW,
     18,
     13,
-    "#241006",
-    "#f2d99b",
+    "#e6d2aa",
+    "rgba(12, 7, 4, 0.86)",
   );
 
   let cursorY = y + 116 + descriptionHeight + 14;
   drawDivider(x + innerX, cursorY, innerW);
   cursorY += 12;
-  text("当前贡献", x + innerX, cursorY, 14, "#3a1a0a", "left", undefined, "#f2d99b");
+  text("当前贡献", x + innerX, cursorY, 14, "#f3d18a", "left", undefined, "rgba(12, 7, 4, 0.86)");
   cursorY += 23;
   for (let index = 0; index < statEntries.length; index += 1) {
     const column = index % 2;
@@ -1572,10 +1686,19 @@ function drawItemTooltip(item: ItemSnapshot): void {
   cursorY += Math.max(1, statRows) * 30 + 4;
   drawDivider(x + innerX, cursorY, innerW);
   cursorY += 12;
-  text("连携状态", x + innerX, cursorY, 14, "#3a1a0a", "left", undefined, "#f2d99b");
+  text("连携状态", x + innerX, cursorY, 14, "#f3d18a", "left", undefined, "rgba(12, 7, 4, 0.86)");
   cursorY += 22;
   if (effectRows.length === 0) {
-    text("无连携效果", x + innerX, cursorY, 13, "#4f2a12", "left", undefined, "#f2d99b");
+    text(
+      "无连携效果",
+      x + innerX,
+      cursorY,
+      13,
+      "#b9c8b5",
+      "left",
+      undefined,
+      "rgba(12, 7, 4, 0.86)",
+    );
     return;
   }
   for (const row of effectRows) {
@@ -1684,13 +1807,8 @@ function drawGhost(): void {
     return;
   }
   ctx.globalAlpha = 0.78;
-  const frameSprite =
-    item.def.rarity === "rare" || item.def.rarity === "epic"
-      ? uiSprites.frameRare
-      : uiSprites.frameCommon;
-  drawSprite(frameSprite, pointer.x - 30, pointer.y - 30, CELL - 4, CELL - 4, 0);
   if (
-    !drawSprite(itemSprites[item.def.id], pointer.x - 25, pointer.y - 25, CELL - 32, CELL - 32, 6)
+    !drawSprite(itemSprites[item.def.id], pointer.x - 27, pointer.y - 27, CELL - 18, CELL - 18, 6)
   ) {
     text(item.def.symbol, pointer.x, pointer.y - 7, 24, "#fff7d6", "center", "monospace");
   }
@@ -1726,7 +1844,14 @@ function button(
   }
 }
 
-function drawBar(x: number, y: number, w: number, h: number, ratio: number, color: string): void {
+function drawFallbackBar(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  ratio: number,
+  color: string,
+): void {
   ctx.fillStyle = "rgba(35, 27, 20, 0.88)";
   roundRect(x, y, w, h, h / 2, true);
   ctx.fillStyle = color;
@@ -1734,6 +1859,412 @@ function drawBar(x: number, y: number, w: number, h: number, ratio: number, colo
   ctx.strokeStyle = "rgba(255, 235, 180, 0.22)";
   ctx.lineWidth = 1;
   roundRect(x, y, w, h, h / 2, false);
+}
+
+function drawHealthBar(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  ratio: number,
+  themeName: BarThemeName,
+  now: number,
+  states: BarStatusVisuals = {},
+): void {
+  const theme = barThemes[themeName];
+  const frame = spriteCache.get(theme.framePath);
+  if (!frame?.complete || frame.naturalWidth === 0) {
+    drawFallbackBar(
+      x,
+      y + h * 0.36,
+      w,
+      h * 0.24,
+      ratio,
+      themeName === "player" ? "#63d990" : "#cf4e4e",
+    );
+    return;
+  }
+
+  const cropHeight = Math.min(theme.frameCropHeight, frame.naturalHeight);
+  const layout = barFrameLayout(theme, frame.naturalWidth, x, w, h, cropHeight);
+  const fillX = sourceBarXToDest(theme, frame.naturalWidth, layout, x, theme.fillLeft);
+  const fillRight = sourceBarXToDest(
+    theme,
+    frame.naturalWidth,
+    layout,
+    x,
+    theme.fillLeft + theme.fillWidth,
+  );
+  const fillY = y + (theme.fillTop / cropHeight) * h;
+  const fillW = Math.max(0, fillRight - fillX);
+  const fillH = (theme.fillHeight / cropHeight) * h;
+
+  drawBarFill(themeName, fillX, fillY, fillW, fillH, ratio, now, states);
+  drawStretchableBarFrame(frame, theme, x, y, h, cropHeight, layout);
+  drawBarStatusBadges(x, y, w, h, now, states);
+}
+
+function drawStretchableBarFrame(
+  frame: HTMLImageElement,
+  theme: BarTheme,
+  x: number,
+  y: number,
+  h: number,
+  cropHeight: number,
+  layout: BarFrameLayout,
+): void {
+  const rightCapSourceW = frame.naturalWidth - theme.frameRightCapX;
+
+  drawFrameSlice(frame, 0, theme.frameLeftCap, x, y, layout.leftCapW, h, cropHeight);
+  drawFrameSlice(
+    frame,
+    theme.frameLeftCap,
+    theme.frameCenterX - theme.frameLeftCap,
+    x + layout.leftCapW,
+    y,
+    layout.railW,
+    h,
+    cropHeight,
+  );
+  drawFrameSlice(
+    frame,
+    theme.frameCenterX,
+    theme.frameCenterWidth,
+    layout.centerX,
+    y,
+    layout.centerW,
+    h,
+    cropHeight,
+  );
+  drawFrameSlice(
+    frame,
+    theme.frameCenterX + theme.frameCenterWidth,
+    theme.frameRightCapX - theme.frameCenterX - theme.frameCenterWidth,
+    layout.rightRailX,
+    y,
+    layout.railW,
+    h,
+    cropHeight,
+  );
+  drawFrameSlice(
+    frame,
+    theme.frameRightCapX,
+    rightCapSourceW,
+    layout.rightCapX,
+    y,
+    layout.rightCapW,
+    h,
+    cropHeight,
+  );
+}
+
+function barFrameLayout(
+  theme: BarTheme,
+  frameWidth: number,
+  x: number,
+  w: number,
+  h: number,
+  cropHeight: number,
+): BarFrameLayout {
+  const scale = h / cropHeight;
+  const rightCapSourceW = frameWidth - theme.frameRightCapX;
+  const leftCapW = Math.min(w * 0.28, theme.frameLeftCap * scale);
+  const centerW = Math.min(w * 0.18, theme.frameCenterWidth * scale);
+  const rightCapW = Math.min(w * 0.28, rightCapSourceW * scale);
+  const railW = Math.max(1, (w - leftCapW - centerW - rightCapW) / 2);
+  const centerX = x + leftCapW + railW;
+  const rightRailX = centerX + centerW;
+  const rightCapX = x + w - rightCapW;
+  return { leftCapW, centerW, rightCapW, railW, centerX, rightRailX, rightCapX };
+}
+
+function sourceBarXToDest(
+  theme: BarTheme,
+  frameWidth: number,
+  layout: BarFrameLayout,
+  x: number,
+  sourceX: number,
+): number {
+  if (sourceX <= theme.frameLeftCap) {
+    return x + (sourceX / theme.frameLeftCap) * layout.leftCapW;
+  }
+  if (sourceX <= theme.frameCenterX) {
+    const sourceW = theme.frameCenterX - theme.frameLeftCap;
+    return x + layout.leftCapW + ((sourceX - theme.frameLeftCap) / sourceW) * layout.railW;
+  }
+  if (sourceX <= theme.frameCenterX + theme.frameCenterWidth) {
+    return (
+      layout.centerX + ((sourceX - theme.frameCenterX) / theme.frameCenterWidth) * layout.centerW
+    );
+  }
+  if (sourceX <= theme.frameRightCapX) {
+    const sourceW = theme.frameRightCapX - theme.frameCenterX - theme.frameCenterWidth;
+    return (
+      layout.rightRailX +
+      ((sourceX - theme.frameCenterX - theme.frameCenterWidth) / sourceW) * layout.railW
+    );
+  }
+  return (
+    layout.rightCapX +
+    ((sourceX - theme.frameRightCapX) / (frameWidth - theme.frameRightCapX)) * layout.rightCapW
+  );
+}
+
+function drawFrameSlice(
+  frame: HTMLImageElement,
+  sourceX: number,
+  sourceW: number,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  cropHeight: number,
+): void {
+  if (sourceW <= 0 || w <= 0) {
+    return;
+  }
+  ctx.drawImage(frame, sourceX, 0, sourceW, cropHeight, x, y, w, h);
+}
+
+function drawBarFill(
+  themeName: BarThemeName,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  ratio: number,
+  now: number,
+  states: BarStatusVisuals,
+): void {
+  const theme = barThemes[themeName];
+  const fillRatio = Math.max(0, Math.min(1, ratio));
+  const currentW = Math.max(0, w * fillRatio);
+  const radius = Math.max(2, h / 2);
+
+  ctx.save();
+  ctx.fillStyle = theme.troughColor;
+  roundRect(x, y, w, h, radius, true);
+  ctx.restore();
+
+  if (currentW <= 0.5) {
+    return;
+  }
+
+  ctx.save();
+  clippedRoundRect(x, y, currentW, h, Math.max(1, Math.min(radius, currentW / 2)));
+  drawBarFillTexture(themeName, x, y, currentW, h);
+  ctx.globalCompositeOperation = "screen";
+  ctx.globalAlpha = 0.18;
+  const glossW = Math.max(24, currentW * 0.3);
+  const glossX = x - glossW + ((now * 0.12) % (currentW + glossW));
+  const gloss = ctx.createLinearGradient(glossX, y, glossX + glossW, y);
+  gloss.addColorStop(0, "rgba(255,255,255,0)");
+  gloss.addColorStop(0.5, theme.glossColor);
+  gloss.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = gloss;
+  ctx.fillRect(glossX, y, glossW, h);
+  drawBarStateEffects(x, y, currentW, h, now, states);
+  drawBarSparkles(x, y, currentW, h, theme.sparkColor, now);
+  ctx.restore();
+}
+
+function drawBarFillTexture(
+  themeName: BarThemeName,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): void {
+  const theme = barThemes[themeName];
+  const image = spriteCache.get(theme.fillPath);
+  if (!image?.complete || image.naturalWidth === 0) {
+    const gradient = ctx.createLinearGradient(x, y, x + w, y);
+    gradient.addColorStop(0, themeName === "player" ? "#278c45" : "#8c1e18");
+    gradient.addColorStop(0.5, themeName === "player" ? "#80ed62" : "#ff6a23");
+    gradient.addColorStop(1, themeName === "player" ? "#1b6739" : "#6e1517");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(x, y, w, h);
+    return;
+  }
+
+  const sourceX = Math.round(image.naturalWidth * 0.22);
+  const sourceY = Math.round(image.naturalHeight * 0.14);
+  const sourceW = Math.round(image.naturalWidth * 0.56);
+  const sourceH = Math.round(image.naturalHeight * 0.72);
+  ctx.drawImage(image, sourceX, sourceY, sourceW, sourceH, x, y, w, h);
+}
+
+function drawBarStateEffects(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  now: number,
+  states: BarStatusVisuals,
+): void {
+  if (states.poison) {
+    const activeAlpha = Math.max(0, Math.min(1, (states.poison.activeUntil - now) / 1450));
+    const flashAlpha = Math.max(0, Math.min(1, (states.poison.tickFlashUntil - now) / 320));
+    const sweepW = Math.max(18, h * 1.35);
+    const sweepX = x - sweepW + ((now * 0.13) % (w + sweepW));
+    const sweep = ctx.createLinearGradient(sweepX, y, sweepX + sweepW, y);
+    sweep.addColorStop(0, "rgba(75, 244, 126, 0)");
+    sweep.addColorStop(0.5, `rgba(132, 255, 163, ${0.12 + activeAlpha * 0.2 + flashAlpha * 0.2})`);
+    sweep.addColorStop(1, "rgba(75, 244, 126, 0)");
+    ctx.fillStyle = sweep;
+    ctx.fillRect(sweepX, y, sweepW, h);
+  }
+  if (states.burn) {
+    const activeAlpha = Math.max(0, Math.min(1, (states.burn.activeUntil - now) / 1450));
+    const flashAlpha = Math.max(0, Math.min(1, (states.burn.tickFlashUntil - now) / 320));
+    for (let index = 0; index < 3; index += 1) {
+      const emberX = x + ((now * 0.11 + index * 23) % Math.max(28, w));
+      const emberY = y + h * (0.3 + ((index * 19) % 7) / 18);
+      const emberR = 1.1 + flashAlpha * 1.1 + index * 0.18;
+      ctx.globalAlpha = 0.18 + activeAlpha * 0.16 + flashAlpha * 0.12;
+      ctx.fillStyle = index === 0 ? "#ffe4aa" : "#ff7d2d";
+      ctx.beginPath();
+      ctx.arc(emberX, emberY, emberR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+function drawBarSparkles(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  color: string,
+  now: number,
+): void {
+  if (w < 8) {
+    return;
+  }
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  for (let index = 0; index < 3; index += 1) {
+    const px = x + ((now * 0.05 + index * 37) % Math.max(16, w));
+    const py = y + h * (0.22 + ((index * 11) % 7) / 16);
+    const radius = index === 0 ? 1.4 : 1;
+    ctx.globalAlpha = index === 0 ? 0.28 : 0.16;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(px, py, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawBarStatusBadges(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  now: number,
+  states: BarStatusVisuals,
+): void {
+  const badges: Array<{ path: string; activeUntil: number; flashUntil: number }> = [];
+  if (states.poison) {
+    badges.push({
+      path: uiSprites.debuffPoison,
+      activeUntil: states.poison.activeUntil,
+      flashUntil: states.poison.tickFlashUntil,
+    });
+  }
+  if (states.burn) {
+    badges.push({
+      path: uiSprites.debuffBurn,
+      activeUntil: states.burn.activeUntil,
+      flashUntil: states.burn.tickFlashUntil,
+    });
+  }
+  if (badges.length === 0) {
+    return;
+  }
+
+  const size = Math.max(12, Math.min(18, h * 0.44));
+  const gap = Math.max(4, size * 0.16);
+  const totalW = badges.length * size + (badges.length - 1) * gap;
+  let iconX = x + w / 2 - totalW / 2;
+  const iconY = y + h - 1;
+  for (const badge of badges) {
+    drawDebuffBadge(iconX, iconY, size, badge.path, badge.activeUntil, badge.flashUntil, now);
+    iconX += size + gap;
+  }
+}
+
+function drawDebuffBadge(
+  x: number,
+  y: number,
+  size: number,
+  path: string,
+  activeUntil: number,
+  flashUntil: number,
+  now: number,
+): void {
+  const activeAlpha = Math.max(0, Math.min(1, (activeUntil - now) / 1450));
+  const flashAlpha = Math.max(0, Math.min(1, (flashUntil - now) / 320));
+  ctx.save();
+  ctx.globalAlpha = 0.78 + activeAlpha * 0.18;
+  ctx.shadowColor = `rgba(255, 239, 180, ${0.18 + flashAlpha * 0.22})`;
+  ctx.shadowBlur = 10;
+  drawSprite(path, x, y, size, size, Math.max(3, size * 0.2));
+  ctx.restore();
+}
+
+function drawEnemyPoisonMotes(
+  x: number,
+  y: number,
+  size: number,
+  state: EnemyPoisonState,
+  now: number,
+): void {
+  const activeAlpha = Math.max(0, Math.min(1, (state.activeUntil - now) / 1450));
+  const flashAlpha = Math.max(0, Math.min(1, (state.tickFlashUntil - now) / 320));
+  const radius = size * 0.24;
+
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  for (let index = 0; index < 3; index += 1) {
+    const angle = now / 260 + index * 2.2;
+    const moteX = x + Math.cos(angle) * radius * (0.62 + index * 0.16);
+    const moteY = y + Math.sin(angle * 1.1) * 7 - index * 6;
+    const moteR = 2.4 + (index === 0 ? flashAlpha * 1.6 : activeAlpha * 0.8);
+    ctx.globalAlpha = 0.18 + activeAlpha * 0.18 + flashAlpha * 0.28;
+    ctx.fillStyle = index === 0 ? "#b8ffb0" : "#56d86d";
+    ctx.beginPath();
+    ctx.arc(moteX, moteY, moteR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawEnemyBurnMotes(
+  x: number,
+  y: number,
+  size: number,
+  state: EnemyBurnState,
+  now: number,
+): void {
+  const activeAlpha = Math.max(0, Math.min(1, (state.activeUntil - now) / 1450));
+  const flashAlpha = Math.max(0, Math.min(1, (state.tickFlashUntil - now) / 320));
+  const radius = size * 0.19;
+
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  for (let index = 0; index < 3; index += 1) {
+    const angle = now / 220 + index * 2.4;
+    const moteX = x + Math.cos(angle) * radius * (0.58 + index * 0.12);
+    const moteY = y + Math.sin(angle * 1.3) * 5 - index * 5;
+    const moteR = 1.9 + (index === 0 ? flashAlpha * 1.4 : activeAlpha * 0.7);
+    ctx.globalAlpha = 0.16 + activeAlpha * 0.14 + flashAlpha * 0.24;
+    ctx.fillStyle = index === 0 ? "#ffd594" : "#ff7d2d";
+    ctx.beginPath();
+    ctx.arc(moteX, moteY, moteR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 function itemAt(x: number, y: number): GameSnapshot["items"][number] | null {
@@ -1883,6 +2414,7 @@ function drawNinePatch(
   w: number,
   h: number,
   inset: number,
+  destInsetOverride?: number,
 ): boolean {
   const image = spriteCache.get(path);
   if (!image?.complete || image.naturalWidth === 0) {
@@ -1892,7 +2424,8 @@ function drawNinePatch(
   const ih = image.naturalHeight;
   const sourceInset = Math.max(1, Math.min(inset, Math.floor(iw / 2) - 1, Math.floor(ih / 2) - 1));
   const maxDestInset = Math.max(1, Math.floor(Math.min(w, h) * 0.32));
-  const destInset = Math.max(1, Math.min(sourceInset, maxDestInset));
+  const requestedDestInset = destInsetOverride ?? sourceInset;
+  const destInset = Math.max(1, Math.min(requestedDestInset, maxDestInset));
   const dx = [x, x + destInset, x + w - destInset];
   const dy = [y, y + destInset, y + h - destInset];
   const dw = [destInset, Math.max(0, w - destInset * 2), destInset];
@@ -2479,6 +3012,10 @@ function drawSmallSeal(x: number, y: number, w: number, label: string): void {
   fittedText(label, x + w / 2, y + 7, w - 36, 13, "#d7c394", "center");
 }
 
+function drawPanelBackground(path: string, x: number, y: number, w: number, h: number): boolean {
+  return drawNinePatch(path, x, y, w, h, 112, 34);
+}
+
 function drawCellEmptyState(x: number, y: number): void {
   ctx.save();
   ctx.globalAlpha = 0.16;
@@ -2488,7 +3025,8 @@ function drawCellEmptyState(x: number, y: number): void {
 
 function drawPlayerStatusPanel(x: number, y: number, w: number, h: number): void {
   const stats = snapshot.player.stats;
-  drawNinePatch(uiSprites.tooltipParchment, x, y, w, h, 44);
+  const now = performance.now();
+  drawPanelBackground(uiSprites.panelHeroStatus, x, y, w, h);
   const inset = 58;
 
   text(
@@ -2496,23 +3034,31 @@ function drawPlayerStatusPanel(x: number, y: number, w: number, h: number): void
     x + inset,
     y + 50,
     18,
-    "#241006",
+    "#e5f4c8",
     "left",
     '"Songti SC", Georgia, serif',
-    "#f2d99b",
+    "rgba(4, 12, 8, 0.9)",
   );
   text(
     `${Math.ceil(snapshot.player.hp)}/${Math.ceil(stats.maxHp)}`,
     x + w - inset,
     y + 52,
     14,
-    "#241006",
+    "#d7f2b6",
     "right",
     undefined,
-    "#f2d99b",
+    "rgba(4, 12, 8, 0.9)",
   );
-  drawBar(x + inset, y + 76, w - inset * 2, 8, snapshot.player.hp / stats.maxHp, "#63d990");
-  drawDivider(x + inset, y + 91, w - inset * 2);
+  drawHealthBar(
+    x + inset - 16,
+    y + 62,
+    w - inset * 2 + 32,
+    42,
+    snapshot.player.hp / stats.maxHp,
+    "player",
+    now,
+  );
+  drawDivider(x + inset, y + 112, w - inset * 2);
 
   const rows = [
     ["攻击", fmt(stats.attack), "攻速", fmt(stats.attackSpeed)],
@@ -2521,7 +3067,7 @@ function drawPlayerStatusPanel(x: number, y: number, w: number, h: number): void
     ["反伤", fmt(stats.thorns), "暴击", `${Math.round(stats.critChance * 100)}%`],
   ] as const;
 
-  let cursorY = y + 103;
+  let cursorY = y + 124;
   for (const [leftLabel, leftValue, rightLabel, rightValue] of rows) {
     drawCompactStat(x + inset, cursorY, 90, leftLabel, leftValue);
     drawCompactStat(x + inset + 124, cursorY, 90, rightLabel, rightValue);
@@ -2530,17 +3076,17 @@ function drawPlayerStatusPanel(x: number, y: number, w: number, h: number): void
 }
 
 function drawCompactStat(x: number, y: number, w: number, label: string, value: string): void {
-  text(label, x, y + 2, 12, "#3a1a0a", "left", undefined, "#f2d99b");
-  text(value, x + w, y + 2, 13, "#140904", "right", undefined, "#f2d99b");
+  text(label, x, y + 2, 12, "#a9c09f", "left", undefined, "rgba(4, 12, 8, 0.9)");
+  text(value, x + w, y + 2, 13, "#f1e6bd", "right", undefined, "rgba(4, 12, 8, 0.9)");
 }
 
 function drawStatChip(x: number, y: number, w: number, label: string, value: string): void {
-  text(label, x, y + 4, 13, "#3a1a0a", "left", undefined, "#f2d99b");
-  text(value, x + w, y + 4, 13, "#140904", "right", undefined, "#f2d99b");
+  text(label, x, y + 4, 13, "#aeb8ad", "left", undefined, "rgba(12, 7, 4, 0.86)");
+  text(value, x + w, y + 4, 13, "#ffe0a0", "right", undefined, "rgba(12, 7, 4, 0.86)");
 }
 
 function drawDivider(x: number, y: number, w: number): void {
-  ctx.strokeStyle = "rgba(92, 52, 22, 0.34)";
+  ctx.strokeStyle = "rgba(244, 211, 138, 0.26)";
   ctx.lineWidth = 1;
   line(x, y, x + w, y);
 }
@@ -2556,12 +3102,12 @@ function drawEffectRow(
     x,
     y + 4,
     13,
-    row.active ? "#7a2e14" : "#4b3020",
+    row.active ? "#8ff0b0" : "#9aa49c",
     "left",
     undefined,
-    "#f2d99b",
+    "rgba(12, 7, 4, 0.86)",
   );
-  text(row.description, x + 80, y + 4, 13, "#140904", "left", undefined, "#f2d99b");
+  text(row.description, x + 80, y + 4, 13, "#ead7b1", "left", undefined, "rgba(12, 7, 4, 0.86)");
 }
 
 function roundRect(x: number, y: number, w: number, h: number, r: number, fill: boolean): void {
