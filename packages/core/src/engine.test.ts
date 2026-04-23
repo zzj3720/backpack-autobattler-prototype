@@ -131,4 +131,19 @@ describe("backpack core", () => {
     assert.ok(finalBoss.maxHp > firstBoss.maxHp);
     assert.ok(finalBoss.attack > firstBoss.attack);
   });
+
+  it("caps every wave at three enemies for stable battle staging", () => {
+    for (const wave of defaultContent.waves) {
+      const totalEnemies = wave.enemies.reduce((sum, entry) => sum + entry.count, 0);
+      assert.ok(totalEnemies <= 3, `${wave.id} should not exceed three enemies`);
+    }
+  });
+
+  it("spreads three-enemy waves across fixed lanes", () => {
+    const state = createGame("lane-layout");
+    dispatchCommand(state, { type: "startBattle" });
+
+    const lanes = state.enemies.map((enemy) => enemy.lane).sort((left, right) => left - right);
+    assert.deepEqual(lanes, [0, 1, 2]);
+  });
 });

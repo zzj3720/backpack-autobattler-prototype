@@ -27,8 +27,8 @@ import {
 
 const BASE_STATS: Stats = {
   maxHp: 80,
-  attack: 4,
-  attackSpeed: 1,
+  attack: 9,
+  attackSpeed: 0.55,
   armor: 0,
   regen: 0,
   burn: 0,
@@ -44,6 +44,7 @@ const RARITY_WEIGHT: Record<Rarity, number> = {
   epic: 0.65,
 };
 const MAX_COMBAT_EVENTS = 80;
+const DOT_INTERVAL_MS = 900;
 
 const STARTER_ITEMS = [
   { itemId: "wooden_shield", x: 0, y: 1 },
@@ -199,7 +200,7 @@ export function tickGame(state: GameState, deltaMs: number, content = defaultCon
   state.combat.dotTimerMs -= deltaMs;
   while (state.combat.dotTimerMs <= 0 && state.enemies.length > 0) {
     applyDots(state, build, content);
-    state.combat.dotTimerMs += 500;
+    state.combat.dotTimerMs += DOT_INTERVAL_MS;
     removeDeadEnemies(state);
   }
 
@@ -670,18 +671,24 @@ function instancesAreConnected(instances: ItemInstance[]): boolean {
 function spawnWave(state: GameState, content: GameContent): void {
   const wave = currentWave(content, state);
   state.enemies = [];
+  const planned: string[] = [];
   for (const entry of wave.enemies) {
-    const def = getEnemyDef(content, entry.enemyId);
     for (let index = 0; index < entry.count; index += 1) {
-      state.enemies.push({
-        id: `enemy_${state.nextEnemyId}`,
-        defId: def.id,
-        hp: def.maxHp,
-        attackTimerMs: nextInt(state.rng, 250, 1100),
-        lane: nextInt(state.rng, 0, 2),
-      });
-      state.nextEnemyId += 1;
+      planned.push(entry.enemyId);
     }
+  }
+
+  const lanes = planned.length <= 1 ? [1] : planned.length === 2 ? [0, 2] : [0, 1, 2];
+  for (let index = 0; index < planned.length; index += 1) {
+    const def = getEnemyDef(content, planned[index]!);
+    state.enemies.push({
+      id: `enemy_${state.nextEnemyId}`,
+      defId: def.id,
+      hp: def.maxHp,
+      attackTimerMs: nextInt(state.rng, 420, 1220),
+      lane: lanes[index] ?? 1,
+    });
+    state.nextEnemyId += 1;
   }
 }
 
@@ -736,8 +743,8 @@ function applyDots(state: GameState, build: BuildSnapshot, content: GameContent)
       dealEnemyDamage(
         state,
         enemy,
-        build.stats.burn * 0.55,
-        splitDamageByStat(build, "burn", build.stats.burn * 0.55),
+        build.stats.burn,
+        splitDamageByStat(build, "burn", build.stats.burn),
         content,
         true,
         "burn",
@@ -752,8 +759,8 @@ function applyDots(state: GameState, build: BuildSnapshot, content: GameContent)
       dealEnemyDamage(
         state,
         target,
-        build.stats.poison * 0.9,
-        splitDamageByStat(build, "poison", build.stats.poison * 0.9),
+        build.stats.poison * 1.65,
+        splitDamageByStat(build, "poison", build.stats.poison * 1.65),
         content,
         true,
         "poison",

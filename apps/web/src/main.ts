@@ -108,8 +108,26 @@ const actorSprites: Record<string, string> = {
   brute: `${spriteBase}/actors/brute.png`,
   boss: `${spriteBase}/actors/boss.png`,
 };
+interface StripDef {
+  path: string;
+  frameCount: number;
+  frameWidth: number;
+  frameHeight: number;
+  anchorBottom?: boolean;
+}
+
+const actorAnimationStrips: Record<string, StripDef> = {
+  heroAttack: {
+    path: "/assets/actors/hero-attack-strip-24x256.png",
+    frameCount: 24,
+    frameWidth: 256,
+    frameHeight: 256,
+    anchorBottom: true,
+  },
+};
 const backgroundSprite = "/assets/backgrounds/dungeon-workbench.png";
 const uiBase = "/assets/ui";
+const effectsBase = "/assets/effects";
 const uiSprites = {
   bagOpen: `${uiBase}/bag-open.png`,
   bagClosed: `${uiBase}/bag-closed.png`,
@@ -142,7 +160,51 @@ const rewardCardSprites: Record<Rarity, { normal: string; hover: string }> = {
     hover: `${uiBase}/reward-card-epic-hover.png`,
   },
 };
+const effectStrips: Record<string, StripDef> = {
+  hitSpark: {
+    path: `${effectsBase}/hit-spark-strip-8x256.png`,
+    frameCount: 8,
+    frameWidth: 256,
+    frameHeight: 256,
+  },
+  poisonPuff: {
+    path: `${effectsBase}/poison-puff-strip-8x256.png`,
+    frameCount: 8,
+    frameWidth: 256,
+    frameHeight: 256,
+  },
+  fusionGlow: {
+    path: `${effectsBase}/fusion-glow-strip-8x256.png`,
+    frameCount: 8,
+    frameWidth: 256,
+    frameHeight: 256,
+  },
+};
 const spriteCache = new Map<string, HTMLImageElement>();
+const actorSpriteSurfaceCache = new Map<string, HTMLCanvasElement>();
+const actorStripFrameSurfaceCache = new Map<string, HTMLCanvasElement>();
+const actorSpriteBoundsCache = new Map<string, SpriteBounds>();
+const ACTOR_FILTER =
+  "drop-shadow(0 0 2px rgba(0, 0, 0, 0.9)) drop-shadow(0 6px 5px rgba(0, 0, 0, 0.58))";
+interface FrameBounds {
+  top: number;
+  bottom: number;
+}
+
+interface SpriteBounds {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+interface StripBoundsCacheEntry {
+  frames: FrameBounds[];
+  maxBottom: number;
+}
+
+const stripBoundsCache = new Map<string, StripBoundsCacheEntry>();
+let backgroundLayerCache: HTMLCanvasElement | null = null;
 
 interface HitZone {
   x: number;
@@ -155,6 +217,13 @@ interface HitZone {
 interface Point {
   x: number;
   y: number;
+}
+
+interface ActorDrawOptions {
+  rotation?: number;
+  scaleX?: number;
+  scaleY?: number;
+  alpha?: number;
 }
 
 interface FloatingText {
@@ -172,7 +241,6 @@ interface FloatingText {
 
 interface EnemyHitEffect {
   until: number;
-  color: string;
   critical: boolean;
 }
 
@@ -186,14 +254,35 @@ interface StrikeEffect {
   critical: boolean;
 }
 
-interface ImpactBurst {
+interface HeroAttackEffect {
   id: number;
-  x: number;
-  y: number;
-  color: string;
+  target: Point;
   startedAt: number;
   durationMs: number;
-  radius: number;
+  critical: boolean;
+}
+type SpriteStripDef = StripDef;
+type DamageCombatEvent = Extract<GameSnapshot["combatEvents"][number], { type: "damage" }>;
+
+interface AnimatedSpriteEffect {
+  id: number;
+  strip: SpriteStripDef;
+  x: number;
+  y: number;
+  startedAt: number;
+  durationMs: number;
+  size: number;
+  opacity: number;
+  rotation: number;
+  lift: number;
+  blendMode: GlobalCompositeOperation;
+  anchorCell?: Point;
+}
+
+interface DeferredVisualAction {
+  id: number;
+  triggerAt: number;
+  run: () => void;
 }
 
 const canvas = document.querySelector<HTMLCanvasElement>("#game");
@@ -224,7 +313,10 @@ const floatingTexts: FloatingText[] = [];
 const enemyHitEffects = new Map<string, EnemyHitEffect>();
 const itemPulseUntil = new Map<string, number>();
 const strikeEffects: StrikeEffect[] = [];
-const impactBursts: ImpactBurst[] = [];
+const heroAttackEffects: HeroAttackEffect[] = [];
+const arenaSpriteEffects: AnimatedSpriteEffect[] = [];
+const uiSpriteEffects: AnimatedSpriteEffect[] = [];
+const deferredVisualActions: DeferredVisualAction[] = [];
 const debugWindow = window as typeof window & {
   __backpackDebug?: () => GameSnapshot;
   __backpackDebugForceResult?: (phase?: "victory" | "defeat") => GameSnapshot;
@@ -333,6 +425,7 @@ function render(): void {
   snapshot = querySnapshot(state);
   const now = performance.now();
   consumeCombatEvents(now);
+  flushDeferredVisualActions(now);
   pruneCombatVisuals(now);
   hitZones = [];
   const hoveredItem =
@@ -348,6 +441,7 @@ function render(): void {
   ctx.restore();
   drawRewardChoices();
   drawBackpack(hoveredItem);
+  drawUiSpriteEffects(now);
   drawSidePanel();
   if (hoveredItem) {
     drawItemTooltip(hoveredItem);
@@ -373,77 +467,8 @@ function syncCanvasScale(): void {
 }
 
 function drawBackground(): void {
-  if (drawBackgroundImage()) {
-    ctx.fillStyle = "rgba(4, 8, 9, 0.12)";
-    ctx.fillRect(0, 0, WIDTH, HEIGHT);
-    const vignette = ctx.createRadialGradient(
-      WIDTH * 0.48,
-      HEIGHT * 0.43,
-      140,
-      WIDTH * 0.48,
-      HEIGHT * 0.43,
-      760,
-    );
-    vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
-    vignette.addColorStop(1, "rgba(0, 0, 0, 0.54)");
-    ctx.fillStyle = vignette;
-    ctx.fillRect(0, 0, WIDTH, HEIGHT);
-  } else {
-    const floor = ctx.createLinearGradient(0, 0, WIDTH, HEIGHT);
-    floor.addColorStop(0, "#111819");
-    floor.addColorStop(0.45, "#151611");
-    floor.addColorStop(1, "#080d0e");
-    ctx.fillStyle = floor;
-    ctx.fillRect(0, 0, WIDTH, HEIGHT);
-
-    drawStoneFloor();
-    drawWorkbench();
-  }
-}
-
-function drawBackgroundImage(): boolean {
-  const image = spriteCache.get(backgroundSprite);
-  if (!image?.complete || image.naturalWidth === 0) {
-    return false;
-  }
-
-  const scale = Math.max(WIDTH / image.naturalWidth, HEIGHT / image.naturalHeight);
-  const drawWidth = image.naturalWidth * scale;
-  const drawHeight = image.naturalHeight * scale;
-  ctx.drawImage(image, (WIDTH - drawWidth) / 2, (HEIGHT - drawHeight) / 2, drawWidth, drawHeight);
-  return true;
-}
-
-function drawStoneFloor(): void {
-  ctx.strokeStyle = "rgba(87, 110, 108, 0.16)";
-  ctx.lineWidth = 1;
-  for (let y = 22; y < HEIGHT; y += 58) {
-    line(0, y, WIDTH, y + 20);
-  }
-  for (let x = -80; x < WIDTH; x += 92) {
-    line(x, 0, x + 250, HEIGHT);
-  }
-
-  ctx.fillStyle = "rgba(93, 79, 55, 0.16)";
-  for (let index = 0; index < 16; index += 1) {
-    const x = (index * 173) % WIDTH;
-    const y = 78 + ((index * 97) % 590);
-    roundRect(x, y, 34 + (index % 3) * 12, 3, 2, true);
-  }
-}
-
-function drawWorkbench(): void {
-  const table = ctx.createLinearGradient(0, 52, 0, 698);
-  table.addColorStop(0, "rgba(39, 31, 22, 0.34)");
-  table.addColorStop(1, "rgba(20, 17, 13, 0.48)");
-  ctx.fillStyle = table;
-  roundRect(18, 52, WIDTH - 36, 646, 10, true);
-
-  ctx.strokeStyle = "rgba(143, 111, 70, 0.18)";
-  ctx.lineWidth = 2;
-  for (let x = 28; x < WIDTH - 28; x += 88) {
-    line(x, 58, x + 132, 692);
-  }
+  const layer = getBackgroundLayer();
+  ctx.drawImage(layer, 0, 0, WIDTH, HEIGHT);
 }
 
 function drawHeader(): void {
@@ -648,21 +673,42 @@ function drawBattleBanner(): void {
 }
 
 function drawPlayer(x: number, y: number): void {
-  drawActorShadow(x, y + 98, 168, 34);
-  if (!drawActorSprite(actorSprites.hero, x - 88, y - 96, 176, 176)) {
-    text("HERO", x, y - 9, 13, "#f7fbff", "center");
+  const now = performance.now();
+  const attack = currentHeroAttack(now);
+  const position = heroAttackPosition({ x, y }, attack, now);
+  const frame = heroAttackFrame(attack, now);
+  drawActorShadow(position.x, position.y + 98, attack ? 176 : 170, attack ? 31 : 33);
+  if (
+    !drawActorStripFrame(
+      actorAnimationStrips.heroAttack,
+      frame,
+      position.x,
+      position.y + 4,
+      204,
+      204,
+    )
+  ) {
+    if (!drawActorSprite(actorSprites.hero, position.x - 88, position.y - 96, 176, 176)) {
+      text("HERO", position.x, position.y - 9, 13, "#f7fbff", "center");
+    }
   }
-  drawBar(x - 64, y + 94, 128, 9, snapshot.player.hp / snapshot.player.maxHp, "#5bd48a");
+  drawBar(
+    position.x - 64,
+    position.y + 94,
+    128,
+    9,
+    snapshot.player.hp / snapshot.player.maxHp,
+    "#5bd48a",
+  );
   text(
     `${Math.ceil(snapshot.player.hp)} / ${Math.ceil(snapshot.player.maxHp)}`,
-    x,
-    y + 108,
+    position.x,
+    position.y + 108,
     12,
     "#d6c5a1",
     "center",
   );
 }
-
 function drawEnemies(): void {
   const now = performance.now();
   const laneCounts = [0, 0, 0];
@@ -683,22 +729,14 @@ function drawEnemies(): void {
     const hit = enemyHitEffects.get(enemy.instance.id);
     const hitAlpha = hit ? Math.max(0, Math.min(1, (hit.until - now) / 240)) : 0;
     const hitBoost = hitAlpha * (hit?.critical ? 12 : 6);
-    drawActorShadow(x, y + size * 0.42, size, 22);
+    const groundY = y + size * 0.42;
+    drawActorShadow(x, groundY, size, 22);
     if (
-      !drawActorSprite(
-        actorSprites[spriteId],
-        x - (size + hitBoost) / 2,
-        y - (size + hitBoost) / 2,
-        size + hitBoost,
-        size + hitBoost,
-      )
+      !drawAnchoredActorSprite(actorSprites[spriteId], x, groundY, size + hitBoost, size + hitBoost)
     ) {
       text(enemy.def.symbol, x, y - 10, 13, "#fff4df", "center", "monospace");
     }
-    if (hitAlpha > 0) {
-      drawHitFlash(x, y, size, hit.color, hitAlpha);
-    }
-    drawBar(x - size / 2, y + size * 0.48, size, 7, enemy.instance.hp / enemy.def.maxHp, "#cf4e4e");
+    drawBar(x - size / 2, groundY + 8, size, 7, enemy.instance.hp / enemy.def.maxHp, "#cf4e4e");
   }
 }
 
@@ -819,33 +857,18 @@ function handleCombatEvent(event: GameSnapshot["combatEvents"][number], now: num
 
     case "damage": {
       const point = enemyPoint(event.targetLane, event.targetSlot);
-      const color = damageColor(event.kind, event.critical);
-      enemyHitEffects.set(event.targetId, {
-        until: now + (event.critical ? 360 : 250),
-        color,
-        critical: event.critical,
-      });
-      addFloatingText({
-        id: event.id,
-        x: point.x + jitter(event.id, 18),
-        y: point.y - 58 + jitter(event.id + 11, 10),
-        dx: jitter(event.id + 21, 18),
-        value: `${event.critical ? "暴击 " : ""}${formatDamage(event.amount)}`,
-        color,
-        size: event.critical ? 24 : 17,
-        outline: "rgba(6, 7, 6, 0.9)",
-        startedAt: now,
-        durationMs: event.critical ? 850 : 720,
-      });
-      addImpactBurst(point.x, point.y, color, now, event.critical ? 34 : 22, event.id);
       if (event.kind === "attack") {
-        addStrike({ x: 214, y: 372 }, point, color, now, event.critical, event.id);
-      }
-      for (const sourceId of event.sourceIds) {
-        itemPulseUntil.set(sourceId, now + 620);
-      }
-      if (event.critical) {
-        bumpScreenShake(now, 9, 220);
+        const attack = addHeroAttack(point, now, event.critical, event.id);
+        const impactAt = heroAttackImpactAt(attack);
+        queueDeferredVisualAction({
+          id: event.id,
+          triggerAt: impactAt,
+          run: () => {
+            emitDamageVisuals(event, point, impactAt);
+          },
+        });
+      } else {
+        emitDamageVisuals(event, point, now);
       }
       return;
     }
@@ -871,7 +894,19 @@ function handleCombatEvent(event: GameSnapshot["combatEvents"][number], now: num
 
     case "kill": {
       const point = enemyPoint(event.targetLane, event.targetSlot);
-      addImpactBurst(point.x, point.y, "#f3d18a", now, 48, event.id);
+      addArenaSpriteEffect({
+        id: event.id,
+        strip: effectStrips.hitSpark,
+        x: point.x,
+        y: point.y,
+        startedAt: now,
+        durationMs: 320,
+        size: 176,
+        opacity: 0.88,
+        rotation: jitter(event.id + 71, Math.PI * 0.5),
+        lift: 0,
+        blendMode: "screen",
+      });
       addFloatingText({
         id: event.id,
         x: point.x,
@@ -889,6 +924,20 @@ function handleCombatEvent(event: GameSnapshot["combatEvents"][number], now: num
 
     case "fusionComplete":
       itemPulseUntil.set(event.resultInstanceId, now + 900);
+      addUiSpriteEffect({
+        id: event.id,
+        strip: effectStrips.fusionGlow,
+        x: BAG_X + BAG_W / 2,
+        y: backpackVisualY + 164,
+        anchorCell: { x: event.x, y: event.y },
+        startedAt: now,
+        durationMs: 620,
+        size: 168,
+        opacity: 0.94,
+        rotation: 0,
+        lift: 8,
+        blendMode: "screen",
+      });
       addFloatingText({
         id: event.id,
         x: BAG_X + BAG_W / 2,
@@ -909,6 +958,10 @@ function addFloatingText(textEffect: FloatingText): void {
   floatingTexts.push(textEffect);
 }
 
+function queueDeferredVisualAction(action: DeferredVisualAction): void {
+  deferredVisualActions.push(action);
+}
+
 function addStrike(
   from: Point,
   to: Point,
@@ -923,28 +976,17 @@ function addStrike(
     to,
     color,
     startedAt: now,
-    durationMs: critical ? 260 : 190,
+    durationMs: critical ? 360 : 280,
     critical,
   });
 }
 
-function addImpactBurst(
-  x: number,
-  y: number,
-  color: string,
-  now: number,
-  radius: number,
-  id: number,
-) {
-  impactBursts.push({
-    id,
-    x,
-    y,
-    color,
-    startedAt: now,
-    durationMs: 420,
-    radius,
-  });
+function addArenaSpriteEffect(effect: AnimatedSpriteEffect): void {
+  arenaSpriteEffects.push(effect);
+}
+
+function addUiSpriteEffect(effect: AnimatedSpriteEffect): void {
+  uiSpriteEffects.push(effect);
 }
 
 function bumpScreenShake(now: number, strength: number, durationMs: number): void {
@@ -952,10 +994,113 @@ function bumpScreenShake(now: number, strength: number, durationMs: number): voi
   screenShakeUntil = Math.max(screenShakeUntil, now + durationMs);
 }
 
+function emitDamageVisuals(event: DamageCombatEvent, point: Point, startedAt: number): void {
+  const color = damageColor(event.kind, event.critical);
+  enemyHitEffects.set(event.targetId, {
+    until: startedAt + (event.critical ? 360 : 250),
+    critical: event.critical,
+  });
+  addFloatingText({
+    id: event.id,
+    x: point.x + jitter(event.id, 18),
+    y: point.y - 58 + jitter(event.id + 11, 10),
+    dx: jitter(event.id + 21, 18),
+    value: `${event.critical ? "暴击 " : ""}${formatDamage(event.amount)}`,
+    color,
+    size: event.critical ? 24 : 17,
+    outline: "rgba(6, 7, 6, 0.9)",
+    startedAt,
+    durationMs: event.critical ? 850 : 720,
+  });
+  if (event.kind === "attack") {
+    addArenaSpriteEffect({
+      id: event.id,
+      strip: effectStrips.hitSpark,
+      x: point.x,
+      y: point.y,
+      startedAt,
+      durationMs: event.critical ? 460 : 380,
+      size: event.critical ? 188 : 154,
+      opacity: 1,
+      rotation: jitter(event.id + 41, Math.PI * 0.42),
+      lift: 0,
+      blendMode: "screen",
+    });
+  } else if (event.kind === "burn" || event.kind === "thorns") {
+    addArenaSpriteEffect({
+      id: event.id,
+      strip: effectStrips.hitSpark,
+      x: point.x,
+      y: point.y,
+      startedAt,
+      durationMs: 360,
+      size: event.kind === "burn" ? 148 : 136,
+      opacity: 0.9,
+      rotation: jitter(event.id + 49, Math.PI * 0.32),
+      lift: event.kind === "burn" ? 8 : 0,
+      blendMode: "screen",
+    });
+  } else if (event.kind === "poison") {
+    addArenaSpriteEffect({
+      id: event.id,
+      strip: effectStrips.poisonPuff,
+      x: point.x,
+      y: point.y + 10,
+      startedAt,
+      durationMs: 680,
+      size: event.critical ? 174 : 152,
+      opacity: 0.96,
+      rotation: jitter(event.id + 57, Math.PI * 0.16),
+      lift: 20,
+      blendMode: "screen",
+    });
+  }
+  for (const sourceId of event.sourceIds) {
+    itemPulseUntil.set(sourceId, startedAt + 620);
+  }
+  if (event.critical) {
+    bumpScreenShake(startedAt, 9, 220);
+  }
+}
+
 function drawCombatEffects(now: number): void {
   drawStrikes(now);
-  drawImpactBursts(now);
+  drawArenaSpriteEffects(now);
   drawFloatingTexts(now);
+}
+
+function drawArenaSpriteEffects(now: number): void {
+  drawSpriteEffects(arenaSpriteEffects, now);
+}
+
+function drawUiSpriteEffects(now: number): void {
+  drawSpriteEffects(uiSpriteEffects, now);
+}
+
+function drawSpriteEffects(effects: AnimatedSpriteEffect[], now: number): void {
+  for (const effect of effects) {
+    const progress = Math.max(0, Math.min(1, (now - effect.startedAt) / effect.durationMs));
+    const frame = Math.min(
+      effect.strip.frameCount - 1,
+      Math.floor(progress * effect.strip.frameCount),
+    );
+    const fade = progress < 0.72 ? 1 : 1 - (progress - 0.72) / 0.28;
+    const point = effect.anchorCell
+      ? cellCenter(effect.anchorCell.x, effect.anchorCell.y)
+      : { x: effect.x, y: effect.y };
+    const size = effect.size * (0.94 + easeOutCubic(progress) * 0.12);
+    drawSpriteFrame(
+      effect.strip,
+      frame,
+      point.x,
+      point.y - effect.lift * easeOutCubic(progress),
+      size,
+      size,
+      Math.max(0, fade * effect.opacity),
+      effect.blendMode,
+      effect.rotation,
+    );
+  }
 }
 
 function drawStrikes(now: number): void {
@@ -980,28 +1125,6 @@ function drawStrikes(now: number): void {
   ctx.restore();
 }
 
-function drawImpactBursts(now: number): void {
-  ctx.save();
-  ctx.globalCompositeOperation = "screen";
-  for (const burst of impactBursts) {
-    const progress = Math.max(0, Math.min(1, (now - burst.startedAt) / burst.durationMs));
-    const alpha = 1 - progress;
-    const radius = 8 + burst.radius * easeOutCubic(progress);
-    ctx.globalAlpha = alpha * 0.74;
-    ctx.strokeStyle = burst.color;
-    ctx.lineWidth = Math.max(1, 4 * alpha);
-    ctx.beginPath();
-    ctx.arc(burst.x, burst.y, radius, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = alpha * 0.28;
-    ctx.fillStyle = burst.color;
-    ctx.beginPath();
-    ctx.arc(burst.x, burst.y, radius * 0.42, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
-}
-
 function drawFloatingTexts(now: number): void {
   ctx.save();
   for (const float of floatingTexts) {
@@ -1012,23 +1135,6 @@ function drawFloatingTexts(now: number): void {
     ctx.globalAlpha = alpha;
     text(float.value, x, y, float.size, float.color, "center", undefined, float.outline);
   }
-  ctx.restore();
-}
-
-function drawHitFlash(x: number, y: number, size: number, color: string, alpha: number): void {
-  ctx.save();
-  ctx.globalCompositeOperation = "screen";
-  ctx.globalAlpha = alpha * 0.48;
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.ellipse(x, y, size * 0.42, size * 0.36, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha = alpha * 0.32;
-  ctx.strokeStyle = "#fff7d6";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.ellipse(x, y, size * 0.48, size * 0.4, 0, 0, Math.PI * 2);
-  ctx.stroke();
   ctx.restore();
 }
 
@@ -1073,7 +1179,9 @@ function drawClosedBagItemPulses(bagY: number): void {
 function pruneCombatVisuals(now: number): void {
   removeExpired(floatingTexts, (item) => now - item.startedAt <= item.durationMs);
   removeExpired(strikeEffects, (item) => now - item.startedAt <= item.durationMs);
-  removeExpired(impactBursts, (item) => now - item.startedAt <= item.durationMs);
+  removeExpired(heroAttackEffects, (item) => now - item.startedAt <= item.durationMs);
+  removeExpired(arenaSpriteEffects, (item) => now - item.startedAt <= item.durationMs);
+  removeExpired(uiSpriteEffects, (item) => now - item.startedAt <= item.durationMs);
   for (const [id, effect] of enemyHitEffects) {
     if (effect.until <= now) {
       enemyHitEffects.delete(id);
@@ -1089,13 +1197,27 @@ function pruneCombatVisuals(now: number): void {
   }
 }
 
+function flushDeferredVisualActions(now: number): void {
+  for (let index = deferredVisualActions.length - 1; index >= 0; index -= 1) {
+    const action = deferredVisualActions[index]!;
+    if (action.triggerAt > now) {
+      continue;
+    }
+    deferredVisualActions.splice(index, 1);
+    action.run();
+  }
+}
+
 function clearCombatVisuals(): void {
   lastCombatEventId = 0;
   screenShakeUntil = 0;
   screenShakeStrength = 0;
   floatingTexts.length = 0;
   strikeEffects.length = 0;
-  impactBursts.length = 0;
+  heroAttackEffects.length = 0;
+  arenaSpriteEffects.length = 0;
+  uiSpriteEffects.length = 0;
+  deferredVisualActions.length = 0;
   enemyHitEffects.clear();
   itemPulseUntil.clear();
 }
@@ -1109,6 +1231,89 @@ function screenShakeOffset(now: number): Point {
   return {
     x: Math.sin(now * 0.09) * amount,
     y: Math.cos(now * 0.11) * amount * 0.62,
+  };
+}
+
+function addHeroAttack(
+  target: Point,
+  now: number,
+  critical: boolean,
+  id: number,
+): HeroAttackEffect {
+  const durationMs = critical ? 610 : 540;
+  const previous = heroAttackEffects.at(-1);
+  const effect = {
+    id,
+    target,
+    startedAt: previous ? Math.max(now, previous.startedAt + previous.durationMs) : now,
+    durationMs,
+    critical,
+  };
+  heroAttackEffects.push(effect);
+  return effect;
+}
+
+function currentHeroAttack(now: number): HeroAttackEffect | null {
+  for (let index = 0; index < heroAttackEffects.length; index += 1) {
+    const effect = heroAttackEffects[index]!;
+    if (now < effect.startedAt) {
+      return null;
+    }
+    if (now - effect.startedAt <= effect.durationMs) {
+      return effect;
+    }
+  }
+  return null;
+}
+
+function heroAttackFrame(attack: HeroAttackEffect | null, now: number): number {
+  if (!attack || now < attack.startedAt) {
+    return 0;
+  }
+  const progress = heroAttackProgress(attack, now);
+  const sequence = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 23, 23,
+  ];
+  return sequence[Math.min(sequence.length - 1, Math.floor(progress * sequence.length))] ?? 23;
+}
+
+function heroAttackProgress(attack: HeroAttackEffect | null, now: number): number {
+  if (!attack || now < attack.startedAt) {
+    return 0;
+  }
+  return Math.max(0, Math.min(1, (now - attack.startedAt) / attack.durationMs));
+}
+
+function heroAttackPosition(base: Point, attack: HeroAttackEffect | null, now: number): Point {
+  if (!attack || now < attack.startedAt) {
+    return base;
+  }
+  const progress = heroAttackProgress(attack, now);
+  const staging = heroAttackStagingPoint(base, attack.target);
+  if (progress < 0.44) {
+    return lerpPoint(base, staging, easeOutCubic(progress / 0.44));
+  }
+  if (progress < 0.7) {
+    const strikePhase = (progress - 0.44) / 0.26;
+    const lunge = Math.sin(strikePhase * Math.PI) * 16;
+    return {
+      x: staging.x + lunge,
+      y: staging.y - lunge * 0.08,
+    };
+  }
+  return lerpPoint(staging, base, easeOutCubic((progress - 0.7) / 0.3));
+}
+
+function heroAttackImpactAt(attack: HeroAttackEffect): number {
+  return attack.startedAt + attack.durationMs * (18 / 26);
+}
+
+function heroAttackStagingPoint(base: Point, target: Point): Point {
+  const desiredX = Math.max(base.x + 32, Math.min(target.x - 132, WIDTH - 212));
+  const desiredY = Math.max(280, Math.min(base.y + (target.y - base.y) * 0.55, 452));
+  return {
+    x: desiredX,
+    y: desiredY,
   };
 }
 
@@ -1604,11 +1809,16 @@ function preloadSprites(): void {
     backgroundSprite,
     ...Object.values(itemSprites),
     ...Object.values(actorSprites),
+    ...Object.values(actorAnimationStrips).map((strip) => strip.path),
     ...Object.values(uiSprites),
+    ...Object.values(effectStrips).map((strip) => strip.path),
     ...Object.values(rewardCardSprites).flatMap((sprites) => [sprites.normal, sprites.hover]),
   ]) {
     const image = new Image();
-    image.onload = () => render();
+    image.onload = () => {
+      invalidateDerivedSpriteCaches(path);
+      render();
+    };
     image.src = path;
     spriteCache.set(path, image);
   }
@@ -1633,6 +1843,35 @@ function drawSprite(
   ctx.save();
   clippedRoundRect(x, y, w, h, radius);
   ctx.drawImage(image, x, y, w, h);
+  ctx.restore();
+  return true;
+}
+
+function drawSpriteFrame(
+  strip: SpriteStripDef,
+  frame: number,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  alpha: number,
+  blendMode: GlobalCompositeOperation,
+  rotation = 0,
+): boolean {
+  const image = spriteCache.get(strip.path);
+  if (!image?.complete || image.naturalWidth === 0) {
+    return false;
+  }
+  const frameIndex = Math.max(0, Math.min(strip.frameCount - 1, frame));
+  const sourceX = frameIndex * strip.frameWidth;
+  ctx.save();
+  ctx.translate(x, y);
+  if (rotation !== 0) {
+    ctx.rotate(rotation);
+  }
+  ctx.globalAlpha = alpha;
+  ctx.globalCompositeOperation = blendMode;
+  ctx.drawImage(image, sourceX, 0, strip.frameWidth, strip.frameHeight, -w / 2, -h / 2, w, h);
   ctx.restore();
   return true;
 }
@@ -1690,12 +1929,381 @@ function drawActorSprite(
   y: number,
   w: number,
   h: number,
+  options: ActorDrawOptions = {},
 ): boolean {
+  if (!path) {
+    return false;
+  }
+  const image = spriteCache.get(path);
+  if (!image?.complete || image.naturalWidth === 0) {
+    return false;
+  }
+  const hasTransform =
+    options.rotation || (options.scaleX ?? 1) !== 1 || (options.scaleY ?? 1) !== 1;
+  if (!hasTransform && (options.alpha ?? 1) === 1) {
+    const cached = getActorSpriteSurface(path, image, w, h);
+    if (cached) {
+      ctx.drawImage(cached, x - cached.width / 2, y - cached.height / 2);
+      return true;
+    }
+  }
   ctx.save();
-  ctx.filter = "drop-shadow(0 0 2px rgba(0, 0, 0, 0.9)) drop-shadow(0 6px 5px rgba(0, 0, 0, 0.58))";
-  const rendered = drawSprite(path, x, y, w, h, 0);
+  ctx.translate(x + w / 2, y + h / 2);
+  if (options.rotation) {
+    ctx.rotate(options.rotation);
+  }
+  ctx.scale(options.scaleX ?? 1, options.scaleY ?? 1);
+  ctx.globalAlpha = options.alpha ?? 1;
+  ctx.filter = ACTOR_FILTER;
+  ctx.drawImage(image, -w / 2, -h / 2, w, h);
   ctx.restore();
-  return rendered;
+  return true;
+}
+
+function drawAnchoredActorSprite(
+  path: string | undefined,
+  anchorX: number,
+  anchorBottomY: number,
+  w: number,
+  h: number,
+): boolean {
+  if (!path) {
+    return false;
+  }
+  const image = spriteCache.get(path);
+  if (!image?.complete || image.naturalWidth === 0) {
+    return false;
+  }
+  const cached = getActorSpriteSurface(path, image, w, h);
+  const bounds = getSpriteBounds(path, image);
+  if (!cached || !bounds) {
+    return drawActorSprite(path, anchorX - w / 2, anchorBottomY - h, w, h);
+  }
+
+  const paddingX = (cached.width - w) / 2;
+  const paddingY = (cached.height - h) / 2;
+  const visibleCenterX = paddingX + ((bounds.left + bounds.right) / 2 / image.naturalWidth) * w;
+  const visibleBottomY = paddingY + (bounds.bottom / image.naturalHeight) * h;
+  ctx.drawImage(cached, anchorX - visibleCenterX, anchorBottomY - visibleBottomY);
+  return true;
+}
+
+function drawActorStripFrame(
+  strip: SpriteStripDef,
+  frame: number,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): boolean {
+  const image = spriteCache.get(strip.path);
+  if (!image?.complete || image.naturalWidth === 0) {
+    return false;
+  }
+  const frameIndex = Math.max(0, Math.min(strip.frameCount - 1, frame));
+  const sourceX = frameIndex * strip.frameWidth;
+  let drawY = y;
+  if (strip.anchorBottom) {
+    const boundsEntry = getStripBounds(strip, image);
+    const frameBounds = boundsEntry?.frames[frameIndex];
+    if (frameBounds) {
+      drawY += ((boundsEntry.maxBottom - frameBounds.bottom) / strip.frameHeight) * h;
+    }
+  }
+  const cached = getActorStripFrameSurface(strip, image, frameIndex, w, h);
+  if (cached) {
+    ctx.drawImage(cached, x - cached.width / 2, drawY - cached.height / 2);
+    return true;
+  }
+  ctx.save();
+  ctx.translate(x, drawY);
+  ctx.filter = ACTOR_FILTER;
+  ctx.drawImage(image, sourceX, 0, strip.frameWidth, strip.frameHeight, -w / 2, -h / 2, w, h);
+  ctx.restore();
+  return true;
+}
+
+function getStripBounds(
+  strip: SpriteStripDef,
+  image: HTMLImageElement,
+): StripBoundsCacheEntry | null {
+  const cached = stripBoundsCache.get(strip.path);
+  if (cached) {
+    return cached;
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) {
+    return null;
+  }
+  context.drawImage(image, 0, 0);
+  const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+  const frames: FrameBounds[] = [];
+  let maxBottom = 0;
+
+  for (let frameIndex = 0; frameIndex < strip.frameCount; frameIndex += 1) {
+    const frameStartX = frameIndex * strip.frameWidth;
+    let top = strip.frameHeight;
+    let bottom = -1;
+
+    for (let py = 0; py < strip.frameHeight; py += 1) {
+      for (let px = 0; px < strip.frameWidth; px += 1) {
+        const alphaIndex = (py * canvas.width + frameStartX + px) * 4 + 3;
+        if ((data[alphaIndex] ?? 0) <= 8) {
+          continue;
+        }
+        top = Math.min(top, py);
+        bottom = Math.max(bottom, py);
+      }
+    }
+
+    const resolved = {
+      top: top === strip.frameHeight ? 0 : top,
+      bottom: bottom < 0 ? strip.frameHeight - 1 : bottom,
+    };
+    frames.push(resolved);
+    maxBottom = Math.max(maxBottom, resolved.bottom);
+  }
+
+  const entry = { frames, maxBottom };
+  stripBoundsCache.set(strip.path, entry);
+  return entry;
+}
+
+function getSpriteBounds(path: string, image: HTMLImageElement): SpriteBounds | null {
+  const cached = actorSpriteBoundsCache.get(path);
+  if (cached) {
+    return cached;
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) {
+    return null;
+  }
+  context.drawImage(image, 0, 0);
+  const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+  let left = canvas.width;
+  let right = -1;
+  let top = canvas.height;
+  let bottom = -1;
+
+  for (let py = 0; py < canvas.height; py += 1) {
+    for (let px = 0; px < canvas.width; px += 1) {
+      const alphaIndex = (py * canvas.width + px) * 4 + 3;
+      if ((data[alphaIndex] ?? 0) <= 8) {
+        continue;
+      }
+      left = Math.min(left, px);
+      right = Math.max(right, px);
+      top = Math.min(top, py);
+      bottom = Math.max(bottom, py);
+    }
+  }
+
+  const resolved = {
+    left: left === canvas.width ? 0 : left,
+    right: right < 0 ? canvas.width - 1 : right,
+    top: top === canvas.height ? 0 : top,
+    bottom: bottom < 0 ? canvas.height - 1 : bottom,
+  };
+  actorSpriteBoundsCache.set(path, resolved);
+  return resolved;
+}
+
+function getBackgroundLayer(): HTMLCanvasElement {
+  if (backgroundLayerCache) {
+    return backgroundLayerCache;
+  }
+  const layer = document.createElement("canvas");
+  layer.width = WIDTH;
+  layer.height = HEIGHT;
+  const layerCtx = layer.getContext("2d");
+  if (!layerCtx) {
+    return layer;
+  }
+
+  const drawLine = (x1: number, y1: number, x2: number, y2: number): void => {
+    layerCtx.beginPath();
+    layerCtx.moveTo(x1, y1);
+    layerCtx.lineTo(x2, y2);
+    layerCtx.stroke();
+  };
+  const drawRoundedRect = (
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    radius: number,
+    fill: boolean,
+  ): void => {
+    const r = Math.min(radius, w / 2, h / 2);
+    layerCtx.beginPath();
+    layerCtx.moveTo(x + r, y);
+    layerCtx.lineTo(x + w - r, y);
+    layerCtx.quadraticCurveTo(x + w, y, x + w, y + r);
+    layerCtx.lineTo(x + w, y + h - r);
+    layerCtx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    layerCtx.lineTo(x + r, y + h);
+    layerCtx.quadraticCurveTo(x, y + h, x, y + h - r);
+    layerCtx.lineTo(x, y + r);
+    layerCtx.quadraticCurveTo(x, y, x + r, y);
+    if (fill) {
+      layerCtx.fill();
+    } else {
+      layerCtx.stroke();
+    }
+  };
+  const backgroundImage = spriteCache.get(backgroundSprite);
+  if (backgroundImage?.complete && backgroundImage.naturalWidth > 0) {
+    const scale = Math.max(
+      WIDTH / backgroundImage.naturalWidth,
+      HEIGHT / backgroundImage.naturalHeight,
+    );
+    const drawWidth = backgroundImage.naturalWidth * scale;
+    const drawHeight = backgroundImage.naturalHeight * scale;
+    layerCtx.drawImage(
+      backgroundImage,
+      (WIDTH - drawWidth) / 2,
+      (HEIGHT - drawHeight) / 2,
+      drawWidth,
+      drawHeight,
+    );
+    layerCtx.fillStyle = "rgba(4, 8, 9, 0.12)";
+    layerCtx.fillRect(0, 0, WIDTH, HEIGHT);
+    const vignette = layerCtx.createRadialGradient(
+      WIDTH * 0.48,
+      HEIGHT * 0.43,
+      140,
+      WIDTH * 0.48,
+      HEIGHT * 0.43,
+      760,
+    );
+    vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
+    vignette.addColorStop(1, "rgba(0, 0, 0, 0.54)");
+    layerCtx.fillStyle = vignette;
+    layerCtx.fillRect(0, 0, WIDTH, HEIGHT);
+  } else {
+    const floor = layerCtx.createLinearGradient(0, 0, WIDTH, HEIGHT);
+    floor.addColorStop(0, "#111819");
+    floor.addColorStop(0.45, "#151611");
+    floor.addColorStop(1, "#080d0e");
+    layerCtx.fillStyle = floor;
+    layerCtx.fillRect(0, 0, WIDTH, HEIGHT);
+
+    layerCtx.strokeStyle = "rgba(87, 110, 108, 0.16)";
+    layerCtx.lineWidth = 1;
+    for (let y = 22; y < HEIGHT; y += 58) {
+      drawLine(0, y, WIDTH, y + 20);
+    }
+    for (let x = -80; x < WIDTH; x += 92) {
+      drawLine(x, 0, x + 250, HEIGHT);
+    }
+
+    layerCtx.fillStyle = "rgba(93, 79, 55, 0.16)";
+    for (let index = 0; index < 16; index += 1) {
+      const x = (index * 173) % WIDTH;
+      const y = 78 + ((index * 97) % 590);
+      drawRoundedRect(x, y, 34 + (index % 3) * 12, 3, 2, true);
+    }
+
+    const table = layerCtx.createLinearGradient(0, 52, 0, 698);
+    table.addColorStop(0, "rgba(39, 31, 22, 0.34)");
+    table.addColorStop(1, "rgba(20, 17, 13, 0.48)");
+    layerCtx.fillStyle = table;
+    drawRoundedRect(18, 52, WIDTH - 36, 646, 10, true);
+
+    layerCtx.strokeStyle = "rgba(143, 111, 70, 0.18)";
+    layerCtx.lineWidth = 2;
+    for (let x = 28; x < WIDTH - 28; x += 88) {
+      drawLine(x, 58, x + 132, 692);
+    }
+  }
+
+  backgroundLayerCache = layer;
+  return layer;
+}
+
+function getActorSpriteSurface(
+  path: string,
+  image: HTMLImageElement,
+  w: number,
+  h: number,
+): HTMLCanvasElement | null {
+  const key = `${path}|${w}|${h}`;
+  const cached = actorSpriteSurfaceCache.get(key);
+  if (cached) {
+    return cached;
+  }
+  const padding = Math.max(10, Math.ceil(Math.max(w, h) * 0.12));
+  const surface = document.createElement("canvas");
+  surface.width = w + padding * 2;
+  surface.height = h + padding * 2;
+  const surfaceCtx = surface.getContext("2d");
+  if (!surfaceCtx) {
+    return null;
+  }
+  surfaceCtx.filter = ACTOR_FILTER;
+  surfaceCtx.drawImage(image, padding, padding, w, h);
+  actorSpriteSurfaceCache.set(key, surface);
+  return surface;
+}
+
+function getActorStripFrameSurface(
+  strip: SpriteStripDef,
+  image: HTMLImageElement,
+  frameIndex: number,
+  w: number,
+  h: number,
+): HTMLCanvasElement | null {
+  const key = `${strip.path}|${frameIndex}|${w}|${h}`;
+  const cached = actorStripFrameSurfaceCache.get(key);
+  if (cached) {
+    return cached;
+  }
+  const padding = Math.max(10, Math.ceil(Math.max(w, h) * 0.12));
+  const surface = document.createElement("canvas");
+  surface.width = w + padding * 2;
+  surface.height = h + padding * 2;
+  const surfaceCtx = surface.getContext("2d");
+  if (!surfaceCtx) {
+    return null;
+  }
+  surfaceCtx.filter = ACTOR_FILTER;
+  surfaceCtx.drawImage(
+    image,
+    frameIndex * strip.frameWidth,
+    0,
+    strip.frameWidth,
+    strip.frameHeight,
+    padding,
+    padding,
+    w,
+    h,
+  );
+  actorStripFrameSurfaceCache.set(key, surface);
+  return surface;
+}
+
+function invalidateDerivedSpriteCaches(path: string): void {
+  if (path === backgroundSprite) {
+    backgroundLayerCache = null;
+  }
+  stripBoundsCache.delete(path);
+  actorSpriteBoundsCache.delete(path);
+  for (const key of actorSpriteSurfaceCache.keys()) {
+    if (key.startsWith(`${path}|`)) {
+      actorSpriteSurfaceCache.delete(key);
+    }
+  }
+  for (const key of actorStripFrameSurfaceCache.keys()) {
+    if (key.startsWith(`${path}|`)) {
+      actorStripFrameSurfaceCache.delete(key);
+    }
+  }
 }
 
 function text(

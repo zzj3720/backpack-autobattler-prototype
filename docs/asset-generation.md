@@ -4,6 +4,68 @@ Use the `imagegen` skill for bitmap assets. Keep generated source sheets in
 `public/assets/sprites/generated-sheet.png`, then run `node tools/cut-sprites.mjs`
 to slice the sheet into game-ready sprites.
 
+## Combat Effect Sheets
+
+Do not generate combat effect strips as freeform long images. Generate them as
+strict grid sheets on a flat chroma background, then slice them with
+`node tools/cut-effect-sheet.mjs`.
+
+Preferred layout:
+
+- one effect per sheet
+- `8 x 1` equal cells by default
+- one animation frame per cell
+- effect centered in each cell with a safe margin
+- same-size cells and stable anchoring across frames
+- flat solid background chosen to avoid the effect hue itself
+- use background-colored gutters to make the grid obvious without adding new colors
+
+Cutout policy:
+
+- any keyed sprite must use edge feathering
+- do not use hard binary cut edges as the default
+- keep tolerance and feather explicit when exporting
+- actor animation sheets must preserve the source grid exactly with `--no-crop`
+- do not use `--trim-edge` on actor sheets unless the source has generous head,
+  weapon, and footing margins in every frame
+
+Suggested background colors:
+
+- magenta `#ff00ff` for most fire, gold, steel, and neutral effects
+- green `#00ff00` for red/orange or dark effects
+- cyan `#00ffff` if the effect itself is strongly magenta or green
+
+Example export:
+
+```bash
+node tools/cut-effect-sheet.mjs \
+  --source public/assets/effects/fusion-glow-sheet.png \
+  --output public/assets/effects/fusion-glow-strip-8x256.png \
+  --columns 8 --rows 1 --output-cell-size 256 \
+  --key ff00ff --tolerance 60 --feather 24 --crop-padding 6 --trim-edge 24
+```
+
+Actor export:
+
+```bash
+node tools/cut-effect-sheet.mjs \
+  --source public/assets/actors/source/hero-attack-sheet-6x4-green-v1.png \
+  --output public/assets/actors/hero-attack-strip-24x256.png \
+  --columns 6 --rows 4 --output-cell-size 256 \
+  --key 00ff00 --tolerance 92 --feather 40 --trim-edge 0 --no-crop
+```
+
+Example prompt shape:
+
+```text
+Create an 8 by 1 combat VFX sprite sheet for a game. Each cell is an equal
+square frame with the effect centered and aligned consistently from frame to
+frame. Use a flat pure magenta background for chroma key extraction, with the
+same magenta used as the gutter between cells so the grid is obvious. No text,
+no labels, no decorative background, no extra props. Keep a clean safe margin
+around the effect in every cell.
+```
+
 ## Item Icon Direction
 
 Generate item icons as a dark fantasy sprite sheet with consistent camera angle,
