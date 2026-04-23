@@ -23,6 +23,9 @@ const BAG_H = 520;
 const BAG_X = (WIDTH - BAG_W) / 2;
 const BAG_OPEN_Y = 226;
 const BAG_CLOSED_Y = 690;
+const REWARD_CARD_W = 288;
+const REWARD_CARD_H = 72;
+const REWARD_CARD_GAP = 16;
 
 const rarityLabel: Record<Rarity, string> = {
   common: "普通",
@@ -397,12 +400,13 @@ function drawRewardChoices(): void {
   }
 
   const y = BAG_OPEN_Y - 122;
-  const totalW = 252 * snapshot.rewards.length + 16 * (snapshot.rewards.length - 1);
+  const totalW =
+    REWARD_CARD_W * snapshot.rewards.length + REWARD_CARD_GAP * (snapshot.rewards.length - 1);
   let x = (WIDTH - totalW) / 2;
   text("选择一件战利品", WIDTH / 2, y - 34, 22, "#f3d18a", "center", '"Songti SC", Georgia, serif');
   for (const reward of snapshot.rewards) {
     rewardCard(x, y, reward);
-    x += 268;
+    x += REWARD_CARD_W + REWARD_CARD_GAP;
   }
 }
 
@@ -458,9 +462,10 @@ function drawEnemies(): void {
     laneCounts[laneIndex] = order + 1;
     const x = 925 + order * 100;
     const y = 270 + laneIndex * 118;
-    const size = enemy.def.id === "boss" ? 158 : 116;
+    const spriteId = enemy.def.spriteId ?? enemy.def.id;
+    const size = spriteId === "boss" ? 158 : 116;
     drawActorShadow(x, y + size * 0.42, size, 22);
-    if (!drawActorSprite(actorSprites[enemy.def.id], x - size / 2, y - size / 2, size, size)) {
+    if (!drawActorSprite(actorSprites[spriteId], x - size / 2, y - size / 2, size, size)) {
       text(enemy.def.symbol, x, y - 10, 13, "#fff4df", "center", "monospace");
     }
     drawBar(x - size / 2, y + size * 0.48, size, 7, enemy.instance.hp / enemy.def.maxHp, "#cf4e4e");
@@ -522,24 +527,26 @@ function drawBattleLedger(): void {
 }
 
 function rewardCard(x: number, y: number, item: ItemDef): void {
-  const hovered = pointer.x >= x && pointer.x <= x + 252 && pointer.y >= y && pointer.y <= y + 76;
-  drawNinePatch(uiSprites.rewardCard, x, y, 252, 76, 34);
+  const hovered =
+    pointer.x >= x &&
+    pointer.x <= x + REWARD_CARD_W &&
+    pointer.y >= y &&
+    pointer.y <= y + REWARD_CARD_H;
+  drawSprite(uiSprites.rewardCard, x, y, REWARD_CARD_W, REWARD_CARD_H, 0);
   if (hovered) {
     ctx.strokeStyle = "#f3d18a";
     ctx.lineWidth = 2;
-    roundRect(x + 4, y + 4, 244, 68, 7, false);
+    roundRect(x + 5, y + 5, REWARD_CARD_W - 10, REWARD_CARD_H - 10, 7, false);
   }
-  ctx.fillStyle = "rgba(7, 10, 10, 0.72)";
-  roundRect(x + 10, y + 10, 56, 56, 6, true);
-  drawSprite(itemSprites[item.id], x + 12, y + 12, 52, 52, 5);
-  text(item.name, x + 76, y + 10, 15, "#f5f0dc");
-  text(`${rarityLabel[item.rarity]} | ${rewardStatSummary(item)}`, x + 76, y + 31, 12, "#9cb4bd");
-  wrapText(rewardEffectSummary(item), x + 76, y + 49, 166, 14, 11, "#f3d18a");
+  drawSprite(itemSprites[item.id], x + 17, y + 12, 48, 48, 5);
+  text(item.name, x + 86, y + 11, 15, "#f5f0dc");
+  text(`${rarityLabel[item.rarity]} | ${rewardStatSummary(item)}`, x + 86, y + 31, 12, "#9cb4bd");
+  wrapText(rewardEffectSummary(item), x + 86, y + 49, 168, 14, 11, "#f3d18a");
   hitZones.push({
     x,
     y,
-    w: 252,
-    h: 76,
+    w: REWARD_CARD_W,
+    h: REWARD_CARD_H,
     onClick: () => {
       state = dispatchCommand(state, { type: "chooseReward", itemId: item.id });
     },
@@ -863,15 +870,17 @@ function drawNinePatch(
   }
   const iw = image.naturalWidth;
   const ih = image.naturalHeight;
-  const s = Math.min(inset, Math.floor(iw / 2) - 1, Math.floor(ih / 2) - 1);
-  const dx = [x, x + s, x + w - s];
-  const dy = [y, y + s, y + h - s];
-  const dw = [s, Math.max(0, w - s * 2), s];
-  const dh = [s, Math.max(0, h - s * 2), s];
-  const sx = [0, s, iw - s];
-  const sy = [0, s, ih - s];
-  const sw = [s, Math.max(0, iw - s * 2), s];
-  const sh = [s, Math.max(0, ih - s * 2), s];
+  const sourceInset = Math.max(1, Math.min(inset, Math.floor(iw / 2) - 1, Math.floor(ih / 2) - 1));
+  const maxDestInset = Math.max(1, Math.floor(Math.min(w, h) * 0.32));
+  const destInset = Math.max(1, Math.min(sourceInset, maxDestInset));
+  const dx = [x, x + destInset, x + w - destInset];
+  const dy = [y, y + destInset, y + h - destInset];
+  const dw = [destInset, Math.max(0, w - destInset * 2), destInset];
+  const dh = [destInset, Math.max(0, h - destInset * 2), destInset];
+  const sx = [0, sourceInset, iw - sourceInset];
+  const sy = [0, sourceInset, ih - sourceInset];
+  const sw = [sourceInset, Math.max(0, iw - sourceInset * 2), sourceInset];
+  const sh = [sourceInset, Math.max(0, ih - sourceInset * 2), sourceInset];
 
   for (let row = 0; row < 3; row += 1) {
     for (let column = 0; column < 3; column += 1) {
