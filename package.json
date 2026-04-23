@@ -9,6 +9,7 @@
     "preview": "vp preview --host 127.0.0.1",
     "check": "vp check",
     "test": "node --test packages/core/src/engine.test.ts",
+    "test:mobile": "node tests/mobile-smoke.mjs",
     "sim": "node apps/sim/src/main.ts"
   },
   "devDependencies": {
