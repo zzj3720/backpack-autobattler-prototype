@@ -114,6 +114,7 @@ let accumulatorMs = 0;
 let draggingItemId: string | null = null;
 let pointer: Point = { x: 0, y: 0 };
 let hitZones: HitZone[] = [];
+let battleBannerUntilMs = 0;
 const debugWindow = window as typeof window & { __backpackDebug?: () => GameSnapshot };
 debugWindow.__backpackDebug = () => querySnapshot(state);
 preloadSprites();
@@ -193,17 +194,62 @@ function render(): void {
 }
 
 function drawBackground(): void {
-  ctx.fillStyle = "#0b0f12";
+  const floor = ctx.createLinearGradient(0, 0, WIDTH, HEIGHT);
+  floor.addColorStop(0, "#111819");
+  floor.addColorStop(0.45, "#151611");
+  floor.addColorStop(1, "#080d0e");
+  ctx.fillStyle = floor;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
-  ctx.fillStyle = "#121a1f";
-  roundRect(28, 52, 420, 560, 8, true);
-  roundRect(470, 52, 448, 560, 8, true);
-  roundRect(914, 52, 334, 646, 8, true);
-  ctx.strokeStyle = "#20313a";
+
+  drawStoneFloor();
+  drawWorkbench();
+  drawPanelSurface(28, 52, 420, 560);
+  drawPanelSurface(470, 52, 448, 560);
+  drawPanelSurface(914, 52, 334, 646);
+}
+
+function drawStoneFloor(): void {
+  ctx.strokeStyle = "rgba(87, 110, 108, 0.16)";
   ctx.lineWidth = 1;
-  for (let x = 40; x < WIDTH; x += 34) {
-    line(x, 52, x + 180, HEIGHT);
+  for (let y = 22; y < HEIGHT; y += 58) {
+    line(0, y, WIDTH, y + 20);
   }
+  for (let x = -80; x < WIDTH; x += 92) {
+    line(x, 0, x + 250, HEIGHT);
+  }
+
+  ctx.fillStyle = "rgba(93, 79, 55, 0.16)";
+  for (let index = 0; index < 16; index += 1) {
+    const x = (index * 173) % WIDTH;
+    const y = 78 + ((index * 97) % 590);
+    roundRect(x, y, 34 + (index % 3) * 12, 3, 2, true);
+  }
+}
+
+function drawWorkbench(): void {
+  const table = ctx.createLinearGradient(0, 52, 0, 698);
+  table.addColorStop(0, "rgba(39, 31, 22, 0.34)");
+  table.addColorStop(1, "rgba(20, 17, 13, 0.48)");
+  ctx.fillStyle = table;
+  roundRect(18, 52, WIDTH - 36, 646, 10, true);
+
+  ctx.strokeStyle = "rgba(143, 111, 70, 0.18)";
+  ctx.lineWidth = 2;
+  for (let x = 28; x < WIDTH - 28; x += 88) {
+    line(x, 58, x + 132, 692);
+  }
+}
+
+function drawPanelSurface(x: number, y: number, w: number, h: number): void {
+  const surface = ctx.createLinearGradient(x, y, x + w, y + h);
+  surface.addColorStop(0, "rgba(18, 31, 34, 0.96)");
+  surface.addColorStop(0.55, "rgba(15, 24, 27, 0.94)");
+  surface.addColorStop(1, "rgba(10, 15, 18, 0.96)");
+  ctx.fillStyle = surface;
+  roundRect(x, y, w, h, 8, true);
+  ctx.strokeStyle = "rgba(104, 132, 126, 0.24)";
+  ctx.lineWidth = 1;
+  roundRect(x, y, w, h, 8, false);
 }
 
 function drawHeader(): void {
@@ -301,6 +347,7 @@ function drawArena(): void {
 
   drawPlayer(ARENA_X + 86, ARENA_Y + 216);
   drawEnemies();
+  drawBattleBanner();
   text(
     `第 ${snapshot.waveIndex + 1} 波：${snapshot.waveName}`,
     ARENA_X + 24,
@@ -309,6 +356,22 @@ function drawArena(): void {
     "#f5f0dc",
   );
   text(phaseLabel(), ARENA_X + 24, ARENA_Y + 50, 14, "#8fb6c8");
+}
+
+function drawBattleBanner(): void {
+  if (snapshot.phase !== "battle" || performance.now() > battleBannerUntilMs) {
+    return;
+  }
+  const alpha = Math.max(0, Math.min(1, (battleBannerUntilMs - performance.now()) / 850));
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = "rgba(243, 209, 138, 0.16)";
+  roundRect(ARENA_X + 116, ARENA_Y + 28, 150, 40, 8, true);
+  ctx.strokeStyle = "#f3d18a";
+  ctx.lineWidth = 2;
+  roundRect(ARENA_X + 116, ARENA_Y + 28, 150, 40, 8, false);
+  text("开战!", ARENA_X + 191, ARENA_Y + 38, 18, "#f3d18a", "center");
+  ctx.restore();
 }
 
 function drawPlayer(x: number, y: number): void {
@@ -365,9 +428,22 @@ function drawSidePanel(): void {
     y += 46;
   }
 
-  button(PANEL_X + 16, y, 126, 36, "开战", () => {
-    state = dispatchCommand(state, { type: "startBattle" });
-  });
+  button(
+    PANEL_X + 16,
+    y,
+    126,
+    36,
+    snapshot.phase === "battle" ? "战斗中" : "开战",
+    () => {
+      const phaseBefore = state.phase;
+      state = dispatchCommand(state, { type: "startBattle" });
+      if (phaseBefore === "draft" && state.phase === "battle") {
+        paused = false;
+        battleBannerUntilMs = performance.now() + 850;
+      }
+    },
+    snapshot.phase === "draft",
+  );
   button(PANEL_X + 154, y, 98, 36, paused ? "继续" : "暂停", () => {
     paused = !paused;
   });
@@ -417,15 +493,8 @@ function rewardCard(x: number, y: number, item: ItemDef): void {
   roundRect(x + 10, y + 10, 56, 56, 6, true);
   drawSprite(itemSprites[item.id], x + 12, y + 12, 52, 52, 5);
   text(item.name, x + 76, y + 10, 15, "#f5f0dc");
-  wrapText(
-    `${rarityLabel[item.rarity]} | ${item.description}`,
-    x + 76,
-    y + 32,
-    166,
-    16,
-    12,
-    "#9cb4bd",
-  );
+  text(`${rarityLabel[item.rarity]} | ${rewardStatSummary(item)}`, x + 76, y + 31, 12, "#9cb4bd");
+  wrapText(rewardEffectSummary(item), x + 76, y + 49, 166, 14, 11, "#f3d18a");
   hitZones.push({
     x,
     y,
@@ -435,6 +504,18 @@ function rewardCard(x: number, y: number, item: ItemDef): void {
       state = dispatchCommand(state, { type: "chooseReward", itemId: item.id });
     },
   });
+}
+
+function rewardStatSummary(item: ItemDef): string {
+  const stats = statLines({ ...zeroStats(), ...item.stats });
+  return stats.length > 0 ? stats.slice(0, 2).join(" / ") : "无基础数值";
+}
+
+function rewardEffectSummary(item: ItemDef): string {
+  if (item.effects.length === 0) {
+    return item.description;
+  }
+  return item.effects.slice(0, 2).map(effectDescription).join("；");
 }
 
 function drawDamageChart(x: number, y: number): void {
@@ -651,14 +732,17 @@ function button(
   h: number,
   label: string,
   onClick: () => void,
+  enabled = true,
 ): void {
-  ctx.fillStyle = "#24333a";
+  ctx.fillStyle = enabled ? "#263940" : "#1a252a";
   roundRect(x, y, w, h, 6, true);
-  ctx.strokeStyle = "#4c626c";
+  ctx.strokeStyle = enabled ? "#55707a" : "#34454c";
   ctx.lineWidth = 1;
   roundRect(x, y, w, h, 6, false);
-  text(label, x + w / 2, y + h / 2 - 7, 14, "#eef7fa", "center");
-  hitZones.push({ x, y, w, h, onClick });
+  text(label, x + w / 2, y + h / 2 - 7, 14, enabled ? "#eef7fa" : "#7d9199", "center");
+  if (enabled) {
+    hitZones.push({ x, y, w, h, onClick });
+  }
 }
 
 function drawBar(x: number, y: number, w: number, h: number, ratio: number, color: string): void {
@@ -900,6 +984,20 @@ function fmtStat(stat: keyof Stats, value: number): string {
     return `${Math.round(value * 100)}%`;
   }
   return fmt(value);
+}
+
+function zeroStats(): Stats {
+  return {
+    maxHp: 0,
+    attack: 0,
+    attackSpeed: 0,
+    armor: 0,
+    regen: 0,
+    burn: 0,
+    poison: 0,
+    thorns: 0,
+    critChance: 0,
+  };
 }
 
 function dailySeed(): string {
