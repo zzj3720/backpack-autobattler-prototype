@@ -177,6 +177,7 @@ let pointer: Point = { x: 0, y: 0 };
 let hitZones: HitZone[] = [];
 let battleBannerUntilMs = 0;
 let backpackVisualY = BAG_OPEN_Y;
+let landscapeLockRequested = false;
 const debugWindow = window as typeof window & {
   __backpackDebug?: () => GameSnapshot;
   __backpackDebugForceResult?: (phase?: "victory" | "defeat") => GameSnapshot;
@@ -199,12 +200,14 @@ syncCanvasScale();
 preloadSprites();
 
 canvas.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  requestLandscapeViewport();
   pointer = pointerFromEvent(event);
 
   const item = itemAt(pointer.x, pointer.y);
   if (item && state.phase === "draft") {
     draggingItemId = item.instance.id;
-    canvas.setPointerCapture(event.pointerId);
+    capturePointer(event.pointerId);
     return;
   }
 
@@ -216,10 +219,12 @@ canvas.addEventListener("pointerdown", (event) => {
 });
 
 canvas.addEventListener("pointermove", (event) => {
+  event.preventDefault();
   pointer = pointerFromEvent(event);
 });
 
 canvas.addEventListener("pointerup", (event) => {
+  event.preventDefault();
   pointer = pointerFromEvent(event);
   if (draggingItemId) {
     const cell = pointerToCell(pointer.x, pointer.y);
@@ -232,9 +237,19 @@ canvas.addEventListener("pointerup", (event) => {
       });
     }
     draggingItemId = null;
-    canvas.releasePointerCapture(event.pointerId);
+    releasePointer(event.pointerId);
     render();
   }
+});
+
+canvas.addEventListener("pointercancel", (event) => {
+  event.preventDefault();
+  draggingItemId = null;
+  releasePointer(event.pointerId);
+});
+
+canvas.addEventListener("contextmenu", (event) => {
+  event.preventDefault();
 });
 
 window.addEventListener("resize", () => {
@@ -653,6 +668,35 @@ function restartRun(): void {
   state = dispatchCommand(state, { type: "restart", seed: randomSeed() });
   paused = false;
   backpackVisualY = BAG_OPEN_Y;
+}
+
+function capturePointer(pointerId: number): void {
+  try {
+    canvas.setPointerCapture(pointerId);
+  } catch {
+    // Synthetic mobile smoke tests do not create a browser-level active pointer.
+  }
+}
+
+function releasePointer(pointerId: number): void {
+  try {
+    if (canvas.hasPointerCapture(pointerId)) {
+      canvas.releasePointerCapture(pointerId);
+    }
+  } catch {
+    // Pointer capture may already be gone after touch cancellation.
+  }
+}
+
+function requestLandscapeViewport(): void {
+  if (landscapeLockRequested || !window.matchMedia("(pointer: coarse)").matches) {
+    return;
+  }
+  landscapeLockRequested = true;
+  const orientation = screen.orientation as ScreenOrientation & {
+    lock?: (orientation: OrientationLockType) => Promise<void>;
+  };
+  void orientation.lock?.("landscape").catch(() => undefined);
 }
 
 function drawBattleLedger(): void {

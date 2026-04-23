@@ -3,3 +3,4 @@ node_modules/
 dist/
 .tools/
 tests/web-smoke.png
+tests/mobile-smoke.png
