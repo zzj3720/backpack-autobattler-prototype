@@ -147,8 +147,24 @@ let pointer: Point = { x: 0, y: 0 };
 let hitZones: HitZone[] = [];
 let battleBannerUntilMs = 0;
 let backpackVisualY = BAG_OPEN_Y;
-const debugWindow = window as typeof window & { __backpackDebug?: () => GameSnapshot };
+const debugWindow = window as typeof window & {
+  __backpackDebug?: () => GameSnapshot;
+  __backpackDebugForceResult?: (phase?: "victory" | "defeat") => GameSnapshot;
+};
 debugWindow.__backpackDebug = () => querySnapshot(state);
+if (import.meta.env.DEV) {
+  debugWindow.__backpackDebugForceResult = (phase = "victory") => {
+    state.phase = phase;
+    state.endReason = phase === "victory" ? "调试结算：击败深渊核心" : "调试结算：倒在矿坑深处";
+    state.totals.kills = Math.max(state.totals.kills, phase === "victory" ? 38 : 9);
+    state.totals.damageDone = Math.max(state.totals.damageDone, phase === "victory" ? 8420 : 1560);
+    state.enemies = [];
+    paused = true;
+    backpackVisualY = BAG_CLOSED_Y;
+    render();
+    return querySnapshot(state);
+  };
+}
 syncCanvasScale();
 preloadSprites();
 
@@ -588,18 +604,58 @@ function rewardEffectSummary(item: ItemDef): string {
 }
 
 function drawResultCard(): void {
-  const x = 470;
-  const y = 626;
-  drawNinePatch(uiSprites.battleLedger, x, y, 448, 70, 34);
-  text(snapshot.phase === "victory" ? "胜利结算" : "失败结算", x + 18, y + 14, 18, "#3b2413");
-  wrapText(
-    `${snapshot.endReason ?? ""} | 击杀 ${snapshot.totals.kills} | 伤害 ${Math.round(snapshot.totals.damageDone)} | 纹章 ${snapshot.shareCode}`,
-    x + 18,
-    y + 40,
-    410,
-    18,
+  const w = 560;
+  const h = 188;
+  const x = (WIDTH - w) / 2;
+  const y = 488;
+  const inset = 70;
+  const contentW = w - inset * 2;
+  const isVictory = snapshot.phase === "victory";
+
+  drawNinePatch(uiSprites.tooltipParchment, x, y, w, h, 44);
+  text(
+    isVictory ? "胜利结算" : "失败结算",
+    x + w / 2,
+    y + 46,
+    22,
+    isVictory ? "#2b3c14" : "#4a180f",
+    "center",
+    '"Songti SC", Georgia, serif',
+    "#f2d99b",
+  );
+
+  const reason = snapshot.endReason ?? (isVictory ? "远征完成" : "远征中止");
+  wrapText(reason, x + inset, y + 82, contentW, 20, 14, "#241006", "#f2d99b");
+  drawDivider(x + inset, y + 112, contentW);
+  text(
+    `击杀 ${snapshot.totals.kills}`,
+    x + inset,
+    y + 128,
     14,
-    "#4b3827",
+    "#3a1a0a",
+    "left",
+    undefined,
+    "#f2d99b",
+  );
+  text(
+    `伤害 ${Math.round(snapshot.totals.damageDone)}`,
+    x + w / 2,
+    y + 128,
+    14,
+    "#3a1a0a",
+    "center",
+    undefined,
+    "#f2d99b",
+  );
+  text(
+    `纹章 ${snapshot.shareCode}`,
+    x + w - inset,
+    y + 128,
+    14,
+    "#3a1a0a",
+    "right",
+    undefined,
+    "#f2d99b",
   );
 }
 
