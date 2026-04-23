@@ -8,7 +8,9 @@ import {
   tickGame,
   type GameSnapshot,
   type GameState,
+  type EffectDef,
   type ItemDef,
+  type ItemSnapshot,
   type Rarity,
   type Stats,
 } from "../../../packages/core/src/index.ts";
@@ -39,6 +41,18 @@ const rarityLabel: Record<Rarity, string> = {
   uncommon: "优秀",
   rare: "稀有",
   epic: "史诗",
+};
+
+const statLabel: Record<keyof Stats, string> = {
+  maxHp: "生命",
+  attack: "攻击",
+  attackSpeed: "攻速",
+  armor: "护甲",
+  regen: "回复",
+  burn: "燃烧",
+  poison: "毒",
+  thorns: "反伤",
+  critChance: "暴击",
 };
 
 const spriteBase = "/assets/sprites";
@@ -164,13 +178,17 @@ function frame(now: number): void {
 function render(): void {
   snapshot = querySnapshot(state);
   hitZones = [];
+  const hoveredItem = !draggingItemId ? itemAt(pointer.x, pointer.y) : null;
   ctx.clearRect(0, 0, WIDTH, HEIGHT);
   drawBackground();
   drawHeader();
-  drawBackpack();
+  drawBackpack(hoveredItem);
   drawArena();
   drawSidePanel();
   drawTimeline();
+  if (hoveredItem) {
+    drawItemTooltip(hoveredItem);
+  }
   drawGhost();
 }
 
@@ -196,7 +214,7 @@ function drawHeader(): void {
   text("奖励 / 调试 / 结算", 934, 32, 20, "#f5f0dc");
 }
 
-function drawBackpack(): void {
+function drawBackpack(hoveredItem: ItemSnapshot | null): void {
   for (let y = 0; y < GRID_HEIGHT; y += 1) {
     for (let x = 0; x < GRID_WIDTH; x += 1) {
       const px = GRID_X + x * CELL;
@@ -209,13 +227,17 @@ function drawBackpack(): void {
     }
   }
 
+  if (hoveredItem) {
+    drawItemLinkHighlights(hoveredItem);
+  }
+
   for (const item of snapshot.items) {
     const px = GRID_X + item.instance.x * CELL + 7;
     const py = GRID_Y + item.instance.y * CELL + 7;
     ctx.fillStyle = "#1d2a31";
     roundRect(px, py, CELL - 22, CELL - 22, 6, true);
     ctx.strokeStyle = rarityColor[item.def.rarity];
-    ctx.lineWidth = 3;
+    ctx.lineWidth = hoveredItem?.instance.id === item.instance.id ? 5 : 3;
     roundRect(px, py, CELL - 22, CELL - 22, 6, false);
     if (!drawSprite(itemSprites[item.def.id], px + 5, py + 5, CELL - 32, CELL - 32, 6)) {
       text(item.def.symbol, px + 30, py + 18, 24, "#fff7d6", "center", "monospace");
@@ -228,6 +250,39 @@ function drawBackpack(): void {
   const stats = snapshot.player.stats;
   wrapText(formatStats(stats), 54, 520, 380, 20, 15, "#afc7d0");
   text("拖动物品改变邻接。战斗阶段锁定背包。", 54, 624, 13, "#718894");
+}
+
+function drawItemLinkHighlights(item: ItemSnapshot): void {
+  const itemCenter = cellCenter(item.instance.x, item.instance.y);
+  const activeTargets = new Set<string>();
+  const candidateTargets = new Set<string>();
+
+  for (const effect of item.def.effects) {
+    for (const target of effectTargetCells(item, effect)) {
+      if (target.active) {
+        activeTargets.add(`${target.x},${target.y}`);
+      } else {
+        candidateTargets.add(`${target.x},${target.y}`);
+      }
+    }
+  }
+
+  for (const key of candidateTargets) {
+    if (activeTargets.has(key)) {
+      continue;
+    }
+    const [x, y] = key.split(",").map(Number) as [number, number];
+    strokeCell(x, y, "#3f5660", 2);
+  }
+
+  for (const key of activeTargets) {
+    const [x, y] = key.split(",").map(Number) as [number, number];
+    const targetCenter = cellCenter(x, y);
+    ctx.strokeStyle = "#f3d18a";
+    ctx.lineWidth = 3;
+    line(itemCenter.x, itemCenter.y, targetCenter.x, targetCenter.y);
+    strokeCell(x, y, "#f3d18a", 4);
+  }
 }
 
 function drawArena(): void {
@@ -449,6 +504,114 @@ function drawTimeline(): void {
   text("3 分钟短局 | 固定 Seed | Build 分享码", 650, y - 9, 15, "#8fb6c8");
 }
 
+function drawItemTooltip(item: ItemSnapshot): void {
+  const lines = tooltipLines(item);
+  const x = Math.min(WIDTH - 344, Math.max(40, pointer.x + 24));
+  const y = Math.min(HEIGHT - 34 - lines.length * 19, Math.max(72, pointer.y + 18));
+  const w = 320;
+  const h = 76 + lines.length * 19;
+
+  ctx.fillStyle = "rgba(10, 15, 18, 0.96)";
+  roundRect(x, y, w, h, 8, true);
+  ctx.strokeStyle = rarityColor[item.def.rarity];
+  ctx.lineWidth = 2;
+  roundRect(x, y, w, h, 8, false);
+
+  ctx.fillStyle = "#111b20";
+  roundRect(x + 14, y + 14, 54, 54, 6, true);
+  drawSprite(itemSprites[item.def.id], x + 17, y + 17, 48, 48, 5);
+  text(item.def.name, x + 78, y + 14, 17, "#f5f0dc");
+  text(
+    `${rarityLabel[item.def.rarity]} | ${item.def.tags.join(" / ")}`,
+    x + 78,
+    y + 39,
+    12,
+    "#8fb6c8",
+  );
+  wrapText(item.def.description, x + 14, y + 78, w - 28, 17, 12, "#b8cbd3");
+
+  let cursorY = y + 116;
+  for (const lineText of lines) {
+    const active = lineText.startsWith("已触发");
+    text(lineText, x + 14, cursorY, 12, active ? "#f3d18a" : "#8da2aa");
+    cursorY += 19;
+  }
+}
+
+function tooltipLines(item: ItemSnapshot): string[] {
+  const activeLabels = new Set(item.labels.map((label) => label.split(" (")[0]));
+  const baseStats = statLines(item.stats).slice(0, 4);
+  const effectLines =
+    item.def.effects.length > 0
+      ? item.def.effects.map((effect) => {
+          const active = activeLabels.has(effect.label);
+          const stateLabel = active ? "已触发" : "未触发";
+          return `${stateLabel}：${effectDescription(effect)}`;
+        })
+      : ["无连携效果"];
+  return [...baseStats, ...effectLines].slice(0, 8);
+}
+
+function statLines(stats: Stats): string[] {
+  return (Object.entries(stats) as Array<[keyof Stats, number]>)
+    .filter(([, value]) => Math.abs(value) > 0.001)
+    .map(([stat, value]) => `${statLabel[stat]} ${value > 0 ? "+" : ""}${fmtStat(stat, value)}`);
+}
+
+function effectDescription(effect: EffectDef): string {
+  const amount = `${effect.amount > 0 ? "+" : ""}${fmtStat(effect.stat, effect.amount)} ${statLabel[effect.stat]}`;
+  switch (effect.type) {
+    case "adjacentTag":
+      return `邻接 ${effect.tag} ${amount}`;
+    case "sameRowTag":
+      return `同行 ${effect.tag} ${amount}`;
+    case "corner":
+      return `放在角落 ${amount}`;
+    case "emptyNeighbor":
+      return `每个空邻格 ${amount}`;
+    case "lowHp":
+      return `生命低于 ${Math.round(effect.threshold * 100)}% ${amount}`;
+  }
+}
+
+function effectTargetCells(
+  item: ItemSnapshot,
+  effect: EffectDef,
+): Array<{ x: number; y: number; active: boolean }> {
+  switch (effect.type) {
+    case "adjacentTag":
+      return neighbors(item.instance.x, item.instance.y).map((cell) => ({
+        ...cell,
+        active: itemAtCell(cell.x, cell.y)?.def.tags.includes(effect.tag) ?? false,
+      }));
+    case "sameRowTag":
+      return Array.from({ length: GRID_WIDTH }, (_, x) => ({
+        x,
+        y: item.instance.y,
+        active:
+          x !== item.instance.x &&
+          (itemAtCell(x, item.instance.y)?.def.tags.includes(effect.tag) ?? false),
+      })).filter((cell) => cell.x !== item.instance.x);
+    case "corner":
+      return [
+        { x: 0, y: 0 },
+        { x: GRID_WIDTH - 1, y: 0 },
+        { x: 0, y: GRID_HEIGHT - 1 },
+        { x: GRID_WIDTH - 1, y: GRID_HEIGHT - 1 },
+      ].map((cell) => ({
+        ...cell,
+        active: cell.x === item.instance.x && cell.y === item.instance.y,
+      }));
+    case "emptyNeighbor":
+      return neighbors(item.instance.x, item.instance.y).map((cell) => ({
+        ...cell,
+        active: itemAtCell(cell.x, cell.y) === null,
+      }));
+    case "lowHp":
+      return [];
+  }
+}
+
 function drawGhost(): void {
   if (!draggingItemId) {
     return;
@@ -500,9 +663,11 @@ function itemAt(x: number, y: number): GameSnapshot["items"][number] | null {
   if (!cell) {
     return null;
   }
-  return (
-    snapshot.items.find((item) => item.instance.x === cell.x && item.instance.y === cell.y) ?? null
-  );
+  return itemAtCell(cell.x, cell.y);
+}
+
+function itemAtCell(x: number, y: number): GameSnapshot["items"][number] | null {
+  return snapshot.items.find((item) => item.instance.x === x && item.instance.y === y) ?? null;
 }
 
 function pointerToCell(x: number, y: number): Point | null {
@@ -512,6 +677,28 @@ function pointerToCell(x: number, y: number): Point | null {
     return null;
   }
   return { x: gx, y: gy };
+}
+
+function neighbors(x: number, y: number): Point[] {
+  return [
+    { x: x - 1, y },
+    { x: x + 1, y },
+    { x, y: y - 1 },
+    { x, y: y + 1 },
+  ].filter((cell) => cell.x >= 0 && cell.x < GRID_WIDTH && cell.y >= 0 && cell.y < GRID_HEIGHT);
+}
+
+function cellCenter(x: number, y: number): Point {
+  return {
+    x: GRID_X + x * CELL + (CELL - 8) / 2,
+    y: GRID_Y + y * CELL + (CELL - 8) / 2,
+  };
+}
+
+function strokeCell(x: number, y: number, color: string, width: number): void {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  roundRect(GRID_X + x * CELL, GRID_Y + y * CELL, CELL - 8, CELL - 8, 6, false);
 }
 
 function pointerFromEvent(event: PointerEvent): Point {
@@ -679,6 +866,13 @@ function line(x1: number, y1: number, x2: number, y2: number): void {
 
 function fmt(value: number): string {
   return `${Math.round(value * 10) / 10}`;
+}
+
+function fmtStat(stat: keyof Stats, value: number): string {
+  if (stat === "critChance") {
+    return `${Math.round(value * 100)}%`;
+  }
+  return fmt(value);
 }
 
 function dailySeed(): string {
