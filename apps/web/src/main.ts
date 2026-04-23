@@ -506,10 +506,13 @@ function drawTimeline(): void {
 
 function drawItemTooltip(item: ItemSnapshot): void {
   const lines = tooltipLines(item);
-  const x = Math.min(WIDTH - 344, Math.max(40, pointer.x + 24));
-  const y = Math.min(HEIGHT - 34 - lines.length * 19, Math.max(72, pointer.y + 18));
-  const w = 320;
-  const h = 76 + lines.length * 19;
+  const w = 360;
+  const descHeight = measureWrappedTextHeight(item.def.description, w - 28, 17, 12);
+  const lineHeights = lines.map((lineText) => measureWrappedTextHeight(lineText, w - 28, 19, 12));
+  const h =
+    78 + descHeight + 12 + lineHeights.reduce((sum, lineHeight) => sum + lineHeight, 0) + 14;
+  const x = Math.min(WIDTH - w - 24, Math.max(40, pointer.x + 24));
+  const y = Math.min(HEIGHT - 24 - h, Math.max(72, pointer.y + 18));
 
   ctx.fillStyle = "rgba(10, 15, 18, 0.96)";
   roundRect(x, y, w, h, 8, true);
@@ -528,13 +531,20 @@ function drawItemTooltip(item: ItemSnapshot): void {
     12,
     "#8fb6c8",
   );
-  wrapText(item.def.description, x + 14, y + 78, w - 28, 17, 12, "#b8cbd3");
+  const descriptionHeight = wrapText(
+    item.def.description,
+    x + 14,
+    y + 78,
+    w - 28,
+    17,
+    12,
+    "#b8cbd3",
+  );
 
-  let cursorY = y + 116;
+  let cursorY = y + 78 + descriptionHeight + 12;
   for (const lineText of lines) {
     const active = lineText.startsWith("已触发");
-    text(lineText, x + 14, cursorY, 12, active ? "#f3d18a" : "#8da2aa");
-    cursorY += 19;
+    cursorY += wrapText(lineText, x + 14, cursorY, w - 28, 19, 12, active ? "#f3d18a" : "#8da2aa");
   }
 }
 
@@ -774,26 +784,43 @@ function wrapText(
   lineHeight: number,
   size: number,
   color: string,
-): void {
-  const paragraphs = value.split("\n");
+): number {
+  const lines = wrapLines(value, maxWidth, size);
   let cursorY = y;
-  for (const paragraph of paragraphs) {
+  for (const lineText of lines) {
+    text(lineText, x, cursorY, size, color);
+    cursorY += lineHeight;
+  }
+  return Math.max(lineHeight, cursorY - y);
+}
+
+function measureWrappedTextHeight(
+  value: string,
+  maxWidth: number,
+  lineHeight: number,
+  size: number,
+): number {
+  return Math.max(lineHeight, wrapLines(value, maxWidth, size).length * lineHeight);
+}
+
+function wrapLines(value: string, maxWidth: number, size: number): string[] {
+  ctx.font = `${size}px Inter, ui-sans-serif, system-ui, sans-serif`;
+  return value.split("\n").flatMap((paragraph) => {
     const words = paragraph.split("");
+    const lines: string[] = [];
     let lineText = "";
     for (const word of words) {
       const testLine = lineText + word;
-      ctx.font = `${size}px Inter, ui-sans-serif, system-ui, sans-serif`;
       if (ctx.measureText(testLine).width > maxWidth && lineText.length > 0) {
-        text(lineText, x, cursorY, size, color);
+        lines.push(lineText);
         lineText = word;
-        cursorY += lineHeight;
       } else {
         lineText = testLine;
       }
     }
-    text(lineText, x, cursorY, size, color);
-    cursorY += lineHeight;
-  }
+    lines.push(lineText);
+    return lines;
+  });
 }
 
 function formatStats(stats: Stats): string {
