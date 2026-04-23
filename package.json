@@ -1,0 +1,15 @@
+{
+  "name": "backpack-autobattler-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=24"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "build": "node tools/build-web.mjs",
+    "test": "node --test packages/core/src/engine.test.ts",
+    "sim": "node apps/sim/src/main.ts"
+  }
+}

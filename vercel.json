@@ -1,0 +1,17 @@
+{
+  "framework": null,
+  "installCommand": "",
+  "buildCommand": "node tools/build-web.mjs",
+  "outputDirectory": "dist",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    }
+  ]
+}

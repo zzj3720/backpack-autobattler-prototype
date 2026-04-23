@@ -1,0 +1,34 @@
+name: Playtest feedback
+description: Share balance, UX, bug, or feature feedback from a playtest.
+title: "[Feedback]: "
+labels: ["playtest-feedback"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened or what should change?
+    validations:
+      required: true
+  - type: input
+    id: seed
+    attributes:
+      label: Seed or build code
+      description: Paste the seed or BP share code if relevant.
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - Bug
+        - Balance
+        - UX
+        - Content idea
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Repro or context
+      description: Steps, build choices, browser, device, screenshot notes, or anything else useful.
