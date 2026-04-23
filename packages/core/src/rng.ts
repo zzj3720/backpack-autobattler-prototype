@@ -26,10 +26,7 @@ export function nextInt(rng: RngState, min: number, maxInclusive: number): numbe
   return Math.floor(nextFloat(rng) * (maxInclusive - min + 1)) + min;
 }
 
-export function pickWeighted<T>(
-  rng: RngState,
-  entries: Array<{ value: T; weight: number }>
-): T {
+export function pickWeighted<T>(rng: RngState, entries: Array<{ value: T; weight: number }>): T {
   const total = entries.reduce((sum, entry) => sum + Math.max(0, entry.weight), 0);
   if (total <= 0) {
     return entries[0]!.value;

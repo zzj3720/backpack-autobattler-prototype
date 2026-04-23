@@ -10,12 +10,16 @@ const statKeys: StatKey[] = [
   "burn",
   "poison",
   "thorns",
-  "critChance"
+  "critChance",
 ];
 
 export function validateContent(content: GameContent): GameContent {
   const parsed = content;
-  if (!Array.isArray(parsed.items) || !Array.isArray(parsed.enemies) || !Array.isArray(parsed.waves)) {
+  if (
+    !Array.isArray(parsed.items) ||
+    !Array.isArray(parsed.enemies) ||
+    !Array.isArray(parsed.waves)
+  ) {
     throw new Error("Content must contain item, enemy, and wave arrays.");
   }
 
@@ -89,10 +93,10 @@ export const defaultContent = validateContent({
           tag: "poison",
           stat: "attack",
           amount: 2,
-          label: "贴毒瓶 +2 攻击"
-        }
+          label: "贴毒瓶 +2 攻击",
+        },
       ],
-      description: "稳定的起手武器，靠近毒系物品会更凶。"
+      description: "稳定的起手武器，靠近毒系物品会更凶。",
     },
     {
       id: "wooden_shield",
@@ -106,10 +110,10 @@ export const defaultContent = validateContent({
           type: "corner",
           stat: "armor",
           amount: 2,
-          label: "角落 +2 护甲"
-        }
+          label: "角落 +2 护甲",
+        },
       ],
-      description: "放在角落时会卡得更稳。"
+      description: "放在角落时会卡得更稳。",
     },
     {
       id: "poison_vial",
@@ -124,10 +128,10 @@ export const defaultContent = validateContent({
           tag: "weapon",
           stat: "poison",
           amount: 1,
-          label: "贴武器 +1 毒"
-        }
+          label: "贴武器 +1 毒",
+        },
       ],
-      description: "每次毒素结算会持续削血。"
+      description: "每次毒素结算会持续削血。",
     },
     {
       id: "spark_stone",
@@ -142,10 +146,10 @@ export const defaultContent = validateContent({
           tag: "metal",
           stat: "burn",
           amount: 1,
-          label: "贴金属 +1 燃烧"
-        }
+          label: "贴金属 +1 燃烧",
+        },
       ],
-      description: "给全场怪物挂燃烧。"
+      description: "给全场怪物挂燃烧。",
     },
     {
       id: "lucky_coin",
@@ -159,10 +163,10 @@ export const defaultContent = validateContent({
           type: "emptyNeighbor",
           stat: "critChance",
           amount: 0.02,
-          label: "空邻格 +2% 暴击"
-        }
+          label: "空邻格 +2% 暴击",
+        },
       ],
-      description: "越孤独越幸运。"
+      description: "越孤独越幸运。",
     },
     {
       id: "iron_dagger",
@@ -177,10 +181,10 @@ export const defaultContent = validateContent({
           tag: "poison",
           stat: "attack",
           amount: 3,
-          label: "贴毒系 +3 攻击"
-        }
+          label: "贴毒系 +3 攻击",
+        },
       ],
-      description: "需要毒瓶配合的高速武器。"
+      description: "需要毒瓶配合的高速武器。",
     },
     {
       id: "gear_spring",
@@ -195,10 +199,10 @@ export const defaultContent = validateContent({
           tag: "weapon",
           stat: "attackSpeed",
           amount: 0.1,
-          label: "贴武器 +0.1 攻速"
-        }
+          label: "贴武器 +0.1 攻速",
+        },
       ],
-      description: "把慢武器推到离谱频率。"
+      description: "把慢武器推到离谱频率。",
     },
     {
       id: "oil_lamp",
@@ -213,10 +217,10 @@ export const defaultContent = validateContent({
           tag: "fire",
           stat: "burn",
           amount: 1,
-          label: "同行火系 +1 燃烧"
-        }
+          label: "同行火系 +1 燃烧",
+        },
       ],
-      description: "火系成排时会越烧越旺。"
+      description: "火系成排时会越烧越旺。",
     },
     {
       id: "thorn_bark",
@@ -231,10 +235,10 @@ export const defaultContent = validateContent({
           tag: "shield",
           stat: "thorns",
           amount: 2,
-          label: "贴盾 +2 反伤"
-        }
+          label: "贴盾 +2 反伤",
+        },
       ],
-      description: "挨打也能输出。"
+      description: "挨打也能输出。",
     },
     {
       id: "jade_leaf",
@@ -248,10 +252,10 @@ export const defaultContent = validateContent({
           type: "emptyNeighbor",
           stat: "regen",
           amount: 0.15,
-          label: "空邻格 +0.15 回复"
-        }
+          label: "空邻格 +0.15 回复",
+        },
       ],
-      description: "小而干净的续航件。"
+      description: "小而干净的续航件。",
     },
     {
       id: "war_drum",
@@ -266,10 +270,10 @@ export const defaultContent = validateContent({
           tag: "weapon",
           stat: "attackSpeed",
           amount: 0.12,
-          label: "同行武器 +0.12 攻速"
-        }
+          label: "同行武器 +0.12 攻速",
+        },
       ],
-      description: "武器排成一列时爆发明显。"
+      description: "武器排成一列时爆发明显。",
     },
     {
       id: "mirror_shard",
@@ -283,10 +287,10 @@ export const defaultContent = validateContent({
           type: "corner",
           stat: "critChance",
           amount: 0.07,
-          label: "角落 +7% 暴击"
-        }
+          label: "角落 +7% 暴击",
+        },
       ],
-      description: "角落位的暴击核心。"
+      description: "角落位的暴击核心。",
     },
     {
       id: "blood_contract",
@@ -301,10 +305,10 @@ export const defaultContent = validateContent({
           stat: "attack",
           amount: 10,
           threshold: 0.45,
-          label: "低血 +10 攻击"
-        }
+          label: "低血 +10 攻击",
+        },
       ],
-      description: "强，但会把局面推向危险边缘。"
+      description: "强，但会把局面推向危险边缘。",
     },
     {
       id: "bone_ring",
@@ -319,10 +323,10 @@ export const defaultContent = validateContent({
           tag: "curse",
           stat: "attack",
           amount: 3,
-          label: "同行诅咒 +3 攻击"
-        }
+          label: "同行诅咒 +3 攻击",
+        },
       ],
-      description: "诅咒越扎堆，收益越高。"
+      description: "诅咒越扎堆，收益越高。",
     },
     {
       id: "phoenix_ember",
@@ -337,10 +341,10 @@ export const defaultContent = validateContent({
           tag: "fire",
           stat: "burn",
           amount: 2,
-          label: "贴火系 +2 燃烧"
-        }
+          label: "贴火系 +2 燃烧",
+        },
       ],
-      description: "火系流派的终点。"
+      description: "火系流派的终点。",
     },
     {
       id: "black_star",
@@ -355,11 +359,11 @@ export const defaultContent = validateContent({
           tag: "curse",
           stat: "attack",
           amount: 5,
-          label: "贴诅咒 +5 攻击"
-        }
+          label: "贴诅咒 +5 攻击",
+        },
       ],
-      description: "脆，但结算数字很好看。"
-    }
+      description: "脆，但结算数字很好看。",
+    },
   ],
   enemies: [
     {
@@ -369,7 +373,7 @@ export const defaultContent = validateContent({
       maxHp: 24,
       attack: 4,
       attackSpeed: 0.55,
-      armor: 0
+      armor: 0,
     },
     {
       id: "rat",
@@ -378,7 +382,7 @@ export const defaultContent = validateContent({
       maxHp: 18,
       attack: 3,
       attackSpeed: 0.9,
-      armor: 0
+      armor: 0,
     },
     {
       id: "imp",
@@ -387,7 +391,7 @@ export const defaultContent = validateContent({
       maxHp: 34,
       attack: 6,
       attackSpeed: 0.7,
-      armor: 1
+      armor: 1,
     },
     {
       id: "brute",
@@ -396,7 +400,7 @@ export const defaultContent = validateContent({
       maxHp: 58,
       attack: 9,
       attackSpeed: 0.45,
-      armor: 2
+      armor: 2,
     },
     {
       id: "boss",
@@ -405,51 +409,51 @@ export const defaultContent = validateContent({
       maxHp: 180,
       attack: 13,
       attackSpeed: 0.55,
-      armor: 3
-    }
+      armor: 3,
+    },
   ],
   waves: [
     {
       id: "w1",
       name: "潮湿入口",
       enemies: [{ enemyId: "slime", count: 3 }],
-      rewardBias: 0
+      rewardBias: 0,
     },
     {
       id: "w2",
       name: "裂齿巷道",
       enemies: [
         { enemyId: "rat", count: 4 },
-        { enemyId: "slime", count: 1 }
+        { enemyId: "slime", count: 1 },
       ],
-      rewardBias: 0.3
+      rewardBias: 0.3,
     },
     {
       id: "w3",
       name: "焦油火线",
       enemies: [
         { enemyId: "imp", count: 3 },
-        { enemyId: "rat", count: 2 }
+        { enemyId: "rat", count: 2 },
       ],
-      rewardBias: 0.7
+      rewardBias: 0.7,
     },
     {
       id: "w4",
       name: "铁皮门厅",
       enemies: [
         { enemyId: "brute", count: 2 },
-        { enemyId: "imp", count: 2 }
+        { enemyId: "imp", count: 2 },
       ],
-      rewardBias: 1
+      rewardBias: 1,
     },
     {
       id: "w5",
       name: "矿心 Boss",
       enemies: [
         { enemyId: "boss", count: 1 },
-        { enemyId: "imp", count: 2 }
+        { enemyId: "imp", count: 2 },
       ],
-      rewardBias: 1.2
-    }
-  ]
+      rewardBias: 1.2,
+    },
+  ],
 });

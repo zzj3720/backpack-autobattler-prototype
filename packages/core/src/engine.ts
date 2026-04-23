@@ -18,7 +18,7 @@ import {
   type ItemInstance,
   type Rarity,
   type StatKey,
-  type Stats
+  type Stats,
 } from "./types.ts";
 
 const BASE_STATS: Stats = {
@@ -30,20 +30,20 @@ const BASE_STATS: Stats = {
   burn: 0,
   poison: 0,
   thorns: 0,
-  critChance: 0.05
+  critChance: 0.05,
 };
 
 const RARITY_WEIGHT: Record<Rarity, number> = {
   common: 8,
   uncommon: 5,
   rare: 2,
-  epic: 0.65
+  epic: 0.65,
 };
 
 const STARTER_ITEMS = [
   { itemId: "wooden_shield", x: 0, y: 1 },
   { itemId: "rusty_blade", x: 1, y: 1 },
-  { itemId: "poison_vial", x: 2, y: 1 }
+  { itemId: "poison_vial", x: 2, y: 1 },
 ];
 
 export function gridIndex(x: number, y: number): number {
@@ -73,7 +73,7 @@ export function createGame(seed = "daily-seed", content = defaultContent): GameS
     combat: { playerAttackTimerMs: 0, dotTimerMs: 0 },
     totals: createDamageTotals(),
     log: [],
-    endReason: null
+    endReason: null,
   };
 
   for (const starter of STARTER_ITEMS) {
@@ -88,7 +88,7 @@ export function createGame(seed = "daily-seed", content = defaultContent): GameS
 export function dispatchCommand(
   state: GameState,
   command: GameCommand,
-  content = defaultContent
+  content = defaultContent,
 ): GameState {
   switch (command.type) {
     case "restart":
@@ -169,7 +169,7 @@ export function tickGame(state: GameState, deltaMs: number, content = defaultCon
   state.player.hp = clamp(
     state.player.hp + build.stats.regen * (deltaMs / 1000),
     0,
-    build.stats.maxHp
+    build.stats.maxHp,
   );
 
   state.combat.playerAttackTimerMs -= deltaMs;
@@ -186,7 +186,8 @@ export function tickGame(state: GameState, deltaMs: number, content = defaultCon
     removeDeadEnemies(state);
   }
 
-  for (const enemy of [...state.enemies]) {
+  const activeEnemies = state.enemies.slice();
+  for (const enemy of activeEnemies) {
     if (enemy.hp <= 0) {
       continue;
     }
@@ -228,7 +229,7 @@ export function computeBuild(state: GameState, content = defaultContent): BuildS
       x: instance.x,
       y: instance.y,
       stats: itemStats,
-      labels: [] as string[]
+      labels: [] as string[],
     };
   });
 
@@ -246,7 +247,7 @@ export function computeBuild(state: GameState, content = defaultContent): BuildS
 
   return {
     stats: clampStats(stats),
-    items: breakdown.map((item) => ({ ...item, stats: clampStats(item.stats, true) }))
+    items: breakdown.map((item) => ({ ...item, stats: clampStats(item.stats, true) })),
   };
 }
 
@@ -268,7 +269,7 @@ export function querySnapshot(state: GameState, content = defaultContent): GameS
     player: {
       hp: state.player.hp,
       maxHp: build.stats.maxHp,
-      stats: build.stats
+      stats: build.stats,
     },
     items: Object.values(state.items)
       .sort(sortItems)
@@ -281,18 +282,18 @@ export function querySnapshot(state: GameState, content = defaultContent): GameS
           instance,
           def: item.def,
           stats: item.stats,
-          labels: item.labels
+          labels: item.labels,
         };
       }),
     rewards: state.rewards.map((itemId) => getItemDef(content, itemId)),
     enemies: state.enemies.map((enemy) => ({
       instance: enemy,
-      def: getEnemyDef(content, enemy.defId)
+      def: getEnemyDef(content, enemy.defId),
     })),
     totals: cloneTotals(state.totals),
     log: state.log.slice(-8),
     shareCode: createShareCode(state),
-    endReason: state.endReason
+    endReason: state.endReason,
   };
 }
 
@@ -311,7 +312,7 @@ function createDamageTotals(): DamageTotals {
     damageDone: 0,
     damageTaken: 0,
     kills: 0,
-    damageByItem: {}
+    damageByItem: {},
   };
 }
 
@@ -320,7 +321,7 @@ function cloneTotals(totals: DamageTotals): DamageTotals {
     damageDone: totals.damageDone,
     damageTaken: totals.damageTaken,
     kills: totals.kills,
-    damageByItem: { ...totals.damageByItem }
+    damageByItem: { ...totals.damageByItem },
   };
 }
 
@@ -361,7 +362,7 @@ function addItemAt(
   itemId: string,
   x: number,
   y: number,
-  content: GameContent
+  content: GameContent,
 ): ItemInstance {
   getItemDef(content, itemId);
   if (!isInsideGrid(x, y)) {
@@ -375,7 +376,7 @@ function addItemAt(
     id: `item_${state.nextItemId}`,
     defId: itemId,
     x,
-    y
+    y,
   };
   state.nextItemId += 1;
   state.items[instance.id] = instance;
@@ -388,7 +389,7 @@ function moveItem(
   instanceId: string,
   x: number,
   y: number,
-  content: GameContent
+  content: GameContent,
 ): void {
   const instance = state.items[instanceId];
   if (!instance || !isInsideGrid(x, y)) {
@@ -417,7 +418,7 @@ function spawnWave(state: GameState, content: GameContent): void {
         defId: def.id,
         hp: def.maxHp,
         attackTimerMs: nextInt(state.rng, 250, 1100),
-        lane: nextInt(state.rng, 0, 2)
+        lane: nextInt(state.rng, 0, 2),
       });
       state.nextEnemyId += 1;
     }
@@ -432,8 +433,8 @@ function generateRewards(state: GameState, content: GameContent): void {
       state.rng,
       content.items.map((item) => ({
         value: item,
-        weight: rewardWeight(item.rarity, wave.rewardBias)
-      }))
+        weight: rewardWeight(item.rarity, wave.rewardBias),
+      })),
     );
     choices.add(selected.id);
   }
@@ -445,7 +446,7 @@ function rewardWeight(rarity: Rarity, bias: number): number {
     common: Math.max(0.15, 1 - bias * 0.35),
     uncommon: 1 + bias * 0.2,
     rare: 1 + bias * 0.65,
-    epic: 1 + bias * 1.25
+    epic: 1 + bias * 1.25,
   };
   return RARITY_WEIGHT[rarity] * rarityBoost[rarity];
 }
@@ -463,7 +464,7 @@ function playerAttack(state: GameState, build: BuildSnapshot, content: GameConte
     rawDamage,
     splitDamageByStat(build, "attack", rawDamage),
     content,
-    false
+    false,
   );
 }
 
@@ -476,7 +477,7 @@ function applyDots(state: GameState, build: BuildSnapshot, content: GameContent)
         build.stats.burn * 0.55,
         splitDamageByStat(build, "burn", build.stats.burn * 0.55),
         content,
-        true
+        true,
       );
     }
   }
@@ -490,7 +491,7 @@ function applyDots(state: GameState, build: BuildSnapshot, content: GameContent)
         build.stats.poison * 0.9,
         splitDamageByStat(build, "poison", build.stats.poison * 0.9),
         content,
-        true
+        true,
       );
     }
   }
@@ -501,7 +502,7 @@ function enemyAttack(
   enemy: EnemyInstance,
   enemyDef: EnemyDef,
   build: BuildSnapshot,
-  content: GameContent
+  content: GameContent,
 ): void {
   const damage = Math.max(1, enemyDef.attack - build.stats.armor * 0.7);
   state.player.hp -= damage;
@@ -514,7 +515,7 @@ function enemyAttack(
       build.stats.thorns,
       splitDamageByStat(build, "thorns", build.stats.thorns),
       content,
-      true
+      true,
     );
   }
 }
@@ -525,7 +526,7 @@ function dealEnemyDamage(
   rawDamage: number,
   sources: Array<{ sourceId: string; amount: number }>,
   content: GameContent,
-  ignoreArmor: boolean
+  ignoreArmor: boolean,
 ): void {
   if (enemy.hp <= 0 || rawDamage <= 0) {
     return;
@@ -549,12 +550,12 @@ function dealEnemyDamage(
 function splitDamageByStat(
   build: BuildSnapshot,
   stat: StatKey,
-  amount: number
+  amount: number,
 ): Array<{ sourceId: string; amount: number }> {
   const sources = build.items
     .map((item) => ({
       sourceId: item.instanceId,
-      amount: Math.max(0, item.stats[stat])
+      amount: Math.max(0, item.stats[stat]),
     }))
     .filter((source) => source.amount > 0);
 
@@ -610,7 +611,7 @@ function effectAmount(
   effect: EffectDef,
   item: ItemBuildBreakdown,
   state: GameState,
-  content: GameContent
+  content: GameContent,
 ): number {
   switch (effect.type) {
     case "adjacentTag": {
@@ -618,8 +619,7 @@ function effectAmount(
     }
     case "corner": {
       const isCorner =
-        (item.x === 0 || item.x === GRID_WIDTH - 1) &&
-        (item.y === 0 || item.y === GRID_HEIGHT - 1);
+        (item.x === 0 || item.x === GRID_WIDTH - 1) && (item.y === 0 || item.y === GRID_HEIGHT - 1);
       return isCorner ? effect.amount : 0;
     }
     case "sameRowTag": {
@@ -644,7 +644,7 @@ function countAdjacentWithTag(
   state: GameState,
   item: ItemBuildBreakdown,
   tag: string,
-  content: GameContent
+  content: GameContent,
 ): number {
   return neighbors(item.x, item.y).filter((position) => {
     const instanceId = cellAt(state, position.x, position.y);
@@ -659,7 +659,7 @@ function countSameRowWithTag(
   state: GameState,
   item: ItemBuildBreakdown,
   tag: string,
-  content: GameContent
+  content: GameContent,
 ): number {
   let count = 0;
   for (let x = 0; x < GRID_WIDTH; x += 1) {
@@ -675,7 +675,8 @@ function countSameRowWithTag(
 }
 
 function countEmptyNeighbors(state: GameState, x: number, y: number): number {
-  return neighbors(x, y).filter((position) => cellAt(state, position.x, position.y) === null).length;
+  return neighbors(x, y).filter((position) => cellAt(state, position.x, position.y) === null)
+    .length;
 }
 
 function neighbors(x: number, y: number): Array<{ x: number; y: number }> {
@@ -683,7 +684,7 @@ function neighbors(x: number, y: number): Array<{ x: number; y: number }> {
     { x: x - 1, y },
     { x: x + 1, y },
     { x, y: y - 1 },
-    { x, y: y + 1 }
+    { x, y: y + 1 },
   ].filter((position) => isInsideGrid(position.x, position.y));
 }
 
@@ -709,7 +710,7 @@ function zeroStats(): Stats {
     burn: 0,
     poison: 0,
     thorns: 0,
-    critChance: 0
+    critChance: 0,
   };
 }
 
@@ -729,7 +730,7 @@ function clampStats(stats: Stats, allowZeroMaxHp = false): Stats {
     burn: allowZeroMaxHp ? stats.burn : Math.max(0, stats.burn),
     poison: allowZeroMaxHp ? stats.poison : Math.max(0, stats.poison),
     thorns: allowZeroMaxHp ? stats.thorns : Math.max(0, stats.thorns),
-    critChance: clamp(stats.critChance, 0, 0.75)
+    critChance: clamp(stats.critChance, 0, 0.75),
   };
 }
 

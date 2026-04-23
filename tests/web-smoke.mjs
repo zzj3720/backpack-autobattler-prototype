@@ -39,7 +39,7 @@ const metrics = await page.evaluate(() => {
   return {
     width: canvas.width,
     height: canvas.height,
-    brightPixels
+    brightPixels,
   };
 });
 const snapshot = await page.evaluate(() => window.__backpackDebug?.());

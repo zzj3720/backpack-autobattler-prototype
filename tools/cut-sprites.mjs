@@ -6,18 +6,28 @@ const playwrightModule =
   "/Users/zuozijian/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs";
 const { chromium } = await import(playwrightModule);
 
-const source = "apps/web/assets/sprites/generated-sheet.png";
+const source = "public/assets/sprites/generated-sheet.png";
 const columns = 4;
 const rows = 6;
 const size = 128;
 
 const cells = [
-  ["items/rusty_blade.png", "items/wooden_shield.png", "items/poison_vial.png", "items/spark_stone.png"],
+  [
+    "items/rusty_blade.png",
+    "items/wooden_shield.png",
+    "items/poison_vial.png",
+    "items/spark_stone.png",
+  ],
   ["items/lucky_coin.png", "items/iron_dagger.png", "items/gear_spring.png", "items/oil_lamp.png"],
   ["items/thorn_bark.png", "items/jade_leaf.png", "items/war_drum.png", "items/mirror_shard.png"],
-  ["items/blood_contract.png", "items/bone_ring.png", "items/phoenix_ember.png", "items/black_star.png"],
+  [
+    "items/blood_contract.png",
+    "items/bone_ring.png",
+    "items/phoenix_ember.png",
+    "items/black_star.png",
+  ],
   ["actors/hero.png", "actors/slime.png", "actors/rat.png", "actors/imp.png"],
-  ["actors/brute.png", "actors/boss.png", "ui/empty_slot.png", "ui/reward_chest.png"]
+  ["actors/brute.png", "actors/boss.png", "ui/empty_slot.png", "ui/reward_chest.png"],
 ];
 
 const sourceBytes = await readFile(source);
@@ -25,7 +35,13 @@ const dataUrl = `data:image/png;base64,${sourceBytes.toString("base64")}`;
 const browser = await chromium.launch();
 const page = await browser.newPage();
 const sprites = await page.evaluate(
-  async ({ dataUrl: imageUrl, cells: spriteCells, columns: columnCount, rows: rowCount, size: spriteSize }) => {
+  async ({
+    dataUrl: imageUrl,
+    cells: spriteCells,
+    columns: columnCount,
+    rows: rowCount,
+    size: spriteSize,
+  }) => {
     const image = new Image();
     const loaded = new Promise((resolve, reject) => {
       image.onload = resolve;
@@ -58,22 +74,22 @@ const sprites = await page.evaluate(
           0,
           0,
           spriteSize,
-          spriteSize
+          spriteSize,
         );
         outputs.push({
           output: spriteCells[row][column],
-          dataUrl: canvas.toDataURL("image/png")
+          dataUrl: canvas.toDataURL("image/png"),
         });
       }
     }
     return outputs;
   },
-  { dataUrl, cells, columns, rows, size }
+  { dataUrl, cells, columns, rows, size },
 );
 await browser.close();
 
 for (const sprite of sprites) {
-  const output = join("apps/web/assets/sprites", sprite.output);
+  const output = join("public/assets/sprites", sprite.output);
   await mkdir(dirname(output), { recursive: true });
   const base64 = sprite.dataUrl.split(",")[1];
   await writeFile(output, Buffer.from(base64, "base64"));

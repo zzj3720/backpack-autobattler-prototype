@@ -1,12 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import {
-  computeBuild,
-  createGame,
-  dispatchCommand,
-  querySnapshot,
-  tickGame
-} from "./index.ts";
+import { computeBuild, createGame, dispatchCommand, querySnapshot, tickGame } from "./index.ts";
 
 function runScript(seed: string) {
   let state = createGame(seed);

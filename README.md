@@ -5,7 +5,8 @@
 ## Local Run
 
 ```bash
-node server.mjs
+vp install
+vp dev
 ```
 
 Open `http://127.0.0.1:5173`.
@@ -20,7 +21,7 @@ node apps/sim/src/main.ts smoke-seed
 ## Static Build
 
 ```bash
-node tools/build-web.mjs
+vp build
 ```
 
 The deployable static site is written to `dist/`.

@@ -1,8 +1,4 @@
 {
   "files": [],
-  "references": [
-    { "path": "packages/core" },
-    { "path": "apps/web" },
-    { "path": "apps/sim" }
-  ]
+  "references": [{ "path": "packages/core" }, { "path": "apps/web" }, { "path": "apps/sim" }]
 }

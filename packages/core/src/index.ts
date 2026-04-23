@@ -7,7 +7,7 @@ export {
   gridIndex,
   isInsideGrid,
   querySnapshot,
-  tickGame
+  tickGame,
 } from "./engine.ts";
 export { createRng, hashString, nextFloat, nextInt, pickWeighted } from "./rng.ts";
 export * from "./types.ts";

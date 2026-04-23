@@ -10,8 +10,9 @@ import {
   type GameState,
   type ItemDef,
   type Rarity,
-  type Stats
+  type Stats,
 } from "../../../packages/core/src/index.ts";
+import "./style.css";
 
 const WIDTH = 1280;
 const HEIGHT = 760;
@@ -30,17 +31,17 @@ const rarityColor: Record<Rarity, string> = {
   common: "#8b949e",
   uncommon: "#3fb950",
   rare: "#58a6ff",
-  epic: "#d2a8ff"
+  epic: "#d2a8ff",
 };
 
 const rarityLabel: Record<Rarity, string> = {
   common: "普通",
   uncommon: "优秀",
   rare: "稀有",
-  epic: "史诗"
+  epic: "史诗",
 };
 
-const spriteBase = "/apps/web/assets/sprites";
+const spriteBase = "/assets/sprites";
 const itemSprites: Record<string, string> = {
   rusty_blade: `${spriteBase}/items/rusty_blade.png`,
   wooden_shield: `${spriteBase}/items/wooden_shield.png`,
@@ -57,7 +58,7 @@ const itemSprites: Record<string, string> = {
   blood_contract: `${spriteBase}/items/blood_contract.png`,
   bone_ring: `${spriteBase}/items/bone_ring.png`,
   phoenix_ember: `${spriteBase}/items/phoenix_ember.png`,
-  black_star: `${spriteBase}/items/black_star.png`
+  black_star: `${spriteBase}/items/black_star.png`,
 };
 const actorSprites: Record<string, string> = {
   hero: `${spriteBase}/actors/hero.png`,
@@ -65,7 +66,7 @@ const actorSprites: Record<string, string> = {
   rat: `${spriteBase}/actors/rat.png`,
   imp: `${spriteBase}/actors/imp.png`,
   brute: `${spriteBase}/actors/brute.png`,
-  boss: `${spriteBase}/actors/boss.png`
+  boss: `${spriteBase}/actors/boss.png`,
 };
 const spriteCache = new Map<string, HTMLImageElement>();
 
@@ -133,7 +134,7 @@ canvas.addEventListener("pointerup", (event) => {
         type: "moveItem",
         instanceId: draggingItemId,
         x: cell.x,
-        y: cell.y
+        y: cell.y,
       });
     }
     draggingItemId = null;
@@ -245,7 +246,13 @@ function drawArena(): void {
 
   drawPlayer(ARENA_X + 86, ARENA_Y + 216);
   drawEnemies();
-  text(`第 ${snapshot.waveIndex + 1} 波：${snapshot.waveName}`, ARENA_X + 24, ARENA_Y + 24, 18, "#f5f0dc");
+  text(
+    `第 ${snapshot.waveIndex + 1} 波：${snapshot.waveName}`,
+    ARENA_X + 24,
+    ARENA_Y + 24,
+    18,
+    "#f5f0dc",
+  );
   text(phaseLabel(), ARENA_X + 24, ARENA_Y + 50, 14, "#8fb6c8");
 }
 
@@ -259,7 +266,13 @@ function drawPlayer(x: number, y: number): void {
     text("HERO", x, y - 9, 13, "#f7fbff", "center");
   }
   drawBar(x - 48, y + 48, 96, 8, snapshot.player.hp / snapshot.player.maxHp, "#5bd48a");
-  text(`${Math.ceil(snapshot.player.hp)} / ${Math.ceil(snapshot.player.maxHp)}`, x - 45, y + 62, 12, "#b8cbd3");
+  text(
+    `${Math.ceil(snapshot.player.hp)} / ${Math.ceil(snapshot.player.maxHp)}`,
+    x - 45,
+    y + 62,
+    12,
+    "#b8cbd3",
+  );
 }
 
 function drawEnemies(): void {
@@ -349,7 +362,15 @@ function rewardCard(x: number, y: number, item: ItemDef): void {
   roundRect(x + 10, y + 10, 56, 56, 6, true);
   drawSprite(itemSprites[item.id], x + 12, y + 12, 52, 52, 5);
   text(item.name, x + 76, y + 10, 15, "#f5f0dc");
-  wrapText(`${rarityLabel[item.rarity]} | ${item.description}`, x + 76, y + 32, 166, 16, 12, "#9cb4bd");
+  wrapText(
+    `${rarityLabel[item.rarity]} | ${item.description}`,
+    x + 76,
+    y + 32,
+    166,
+    16,
+    12,
+    "#9cb4bd",
+  );
   hitZones.push({
     x,
     y,
@@ -357,7 +378,7 @@ function rewardCard(x: number, y: number, item: ItemDef): void {
     h: 76,
     onClick: () => {
       state = dispatchCommand(state, { type: "chooseReward", itemId: item.id });
-    }
+    },
   });
 }
 
@@ -402,7 +423,7 @@ function drawResultCard(): void {
     410,
     18,
     14,
-    "#b8cbd3"
+    "#b8cbd3",
   );
 }
 
@@ -442,13 +463,22 @@ function drawGhost(): void {
   ctx.strokeStyle = rarityColor[item.def.rarity];
   ctx.lineWidth = 3;
   roundRect(pointer.x - 30, pointer.y - 30, CELL - 22, CELL - 22, 6, false);
-  if (!drawSprite(itemSprites[item.def.id], pointer.x - 25, pointer.y - 25, CELL - 32, CELL - 32, 6)) {
+  if (
+    !drawSprite(itemSprites[item.def.id], pointer.x - 25, pointer.y - 25, CELL - 32, CELL - 32, 6)
+  ) {
     text(item.def.symbol, pointer.x, pointer.y - 7, 24, "#fff7d6", "center", "monospace");
   }
   ctx.globalAlpha = 1;
 }
 
-function button(x: number, y: number, w: number, h: number, label: string, onClick: () => void): void {
+function button(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  label: string,
+  onClick: () => void,
+): void {
   ctx.fillStyle = "#24333a";
   roundRect(x, y, w, h, 6, true);
   ctx.strokeStyle = "#4c626c";
@@ -471,9 +501,7 @@ function itemAt(x: number, y: number): GameSnapshot["items"][number] | null {
     return null;
   }
   return (
-    snapshot.items.find(
-      (item) => item.instance.x === cell.x && item.instance.y === cell.y
-    ) ?? null
+    snapshot.items.find((item) => item.instance.x === cell.x && item.instance.y === cell.y) ?? null
   );
 }
 
@@ -490,12 +518,17 @@ function pointerFromEvent(event: PointerEvent): Point {
   const rect = canvas.getBoundingClientRect();
   return {
     x: ((event.clientX - rect.left) / rect.width) * WIDTH,
-    y: ((event.clientY - rect.top) / rect.height) * HEIGHT
+    y: ((event.clientY - rect.top) / rect.height) * HEIGHT,
   };
 }
 
 function inside(point: Point, zone: HitZone): boolean {
-  return point.x >= zone.x && point.x <= zone.x + zone.w && point.y >= zone.y && point.y <= zone.y + zone.h;
+  return (
+    point.x >= zone.x &&
+    point.x <= zone.x + zone.w &&
+    point.y >= zone.y &&
+    point.y <= zone.y + zone.h
+  );
 }
 
 function preloadSprites(): void {
@@ -513,7 +546,7 @@ function drawSprite(
   y: number,
   w: number,
   h: number,
-  radius: number
+  radius: number,
 ): boolean {
   if (!path) {
     return false;
@@ -537,7 +570,7 @@ function text(
   size: number,
   color: string,
   align: CanvasTextAlign = "left",
-  family = "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+  family = "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
 ): void {
   ctx.fillStyle = color;
   ctx.font = `${size}px ${family}`;
@@ -553,7 +586,7 @@ function wrapText(
   maxWidth: number,
   lineHeight: number,
   size: number,
-  color: string
+  color: string,
 ): void {
   const paragraphs = value.split("\n");
   let cursorY = y;
@@ -582,7 +615,7 @@ function formatStats(stats: Stats): string {
     `攻击 ${fmt(stats.attack)}  攻速 ${fmt(stats.attackSpeed)}`,
     `护甲 ${fmt(stats.armor)}  回复 ${fmt(stats.regen)}`,
     `燃烧 ${fmt(stats.burn)}  毒 ${fmt(stats.poison)}  反伤 ${fmt(stats.thorns)}`,
-    `暴击 ${Math.round(stats.critChance * 100)}%`
+    `暴击 ${Math.round(stats.critChance * 100)}%`,
   ].join("\n");
 }
 
