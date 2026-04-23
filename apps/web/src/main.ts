@@ -82,6 +82,7 @@ const actorSprites: Record<string, string> = {
   brute: `${spriteBase}/actors/brute.png`,
   boss: `${spriteBase}/actors/boss.png`,
 };
+const backgroundSprite = "/assets/backgrounds/dungeon-workbench.png";
 const spriteCache = new Map<string, HTMLImageElement>();
 
 interface HitZone {
@@ -194,18 +195,48 @@ function render(): void {
 }
 
 function drawBackground(): void {
-  const floor = ctx.createLinearGradient(0, 0, WIDTH, HEIGHT);
-  floor.addColorStop(0, "#111819");
-  floor.addColorStop(0.45, "#151611");
-  floor.addColorStop(1, "#080d0e");
-  ctx.fillStyle = floor;
-  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  if (drawBackgroundImage()) {
+    ctx.fillStyle = "rgba(4, 8, 9, 0.28)";
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    const vignette = ctx.createRadialGradient(
+      WIDTH * 0.48,
+      HEIGHT * 0.43,
+      140,
+      WIDTH * 0.48,
+      HEIGHT * 0.43,
+      760,
+    );
+    vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
+    vignette.addColorStop(1, "rgba(0, 0, 0, 0.54)");
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  } else {
+    const floor = ctx.createLinearGradient(0, 0, WIDTH, HEIGHT);
+    floor.addColorStop(0, "#111819");
+    floor.addColorStop(0.45, "#151611");
+    floor.addColorStop(1, "#080d0e");
+    ctx.fillStyle = floor;
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-  drawStoneFloor();
-  drawWorkbench();
+    drawStoneFloor();
+    drawWorkbench();
+  }
   drawPanelSurface(28, 52, 420, 560);
   drawPanelSurface(470, 52, 448, 560);
   drawPanelSurface(914, 52, 334, 646);
+}
+
+function drawBackgroundImage(): boolean {
+  const image = spriteCache.get(backgroundSprite);
+  if (!image?.complete || image.naturalWidth === 0) {
+    return false;
+  }
+
+  const scale = Math.max(WIDTH / image.naturalWidth, HEIGHT / image.naturalHeight);
+  const drawWidth = image.naturalWidth * scale;
+  const drawHeight = image.naturalHeight * scale;
+  ctx.drawImage(image, (WIDTH - drawWidth) / 2, (HEIGHT - drawHeight) / 2, drawWidth, drawHeight);
+  return true;
 }
 
 function drawStoneFloor(): void {
@@ -813,7 +844,11 @@ function inside(point: Point, zone: HitZone): boolean {
 }
 
 function preloadSprites(): void {
-  for (const path of [...Object.values(itemSprites), ...Object.values(actorSprites)]) {
+  for (const path of [
+    backgroundSprite,
+    ...Object.values(itemSprites),
+    ...Object.values(actorSprites),
+  ]) {
     const image = new Image();
     image.onload = () => render();
     image.src = path;

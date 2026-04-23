@@ -33,14 +33,14 @@ slice.
 
 The cutting script expects a `4 x 6` sheet. Each cell is exported as `128 x 128`.
 
-| Row | Column 1 | Column 2 | Column 3 | Column 4 |
-| --- | --- | --- | --- | --- |
-| 1 | `items/rusty_blade.png` common | `items/wooden_shield.png` common | `items/poison_vial.png` common | `items/spark_stone.png` common |
-| 2 | `items/lucky_coin.png` common | `items/iron_dagger.png` uncommon | `items/gear_spring.png` uncommon | `items/oil_lamp.png` uncommon |
-| 3 | `items/thorn_bark.png` uncommon | `items/jade_leaf.png` uncommon | `items/war_drum.png` rare | `items/mirror_shard.png` rare |
-| 4 | `items/blood_contract.png` rare | `items/bone_ring.png` rare | `items/phoenix_ember.png` epic | `items/black_star.png` epic |
-| 5 | `actors/hero.png` | `actors/slime.png` | `actors/rat.png` | `actors/imp.png` |
-| 6 | `actors/brute.png` | `actors/boss.png` | `ui/empty_slot.png` | `ui/reward_chest.png` |
+| Row | Column 1                        | Column 2                         | Column 3                         | Column 4                       |
+| --- | ------------------------------- | -------------------------------- | -------------------------------- | ------------------------------ |
+| 1   | `items/rusty_blade.png` common  | `items/wooden_shield.png` common | `items/poison_vial.png` common   | `items/spark_stone.png` common |
+| 2   | `items/lucky_coin.png` common   | `items/iron_dagger.png` uncommon | `items/gear_spring.png` uncommon | `items/oil_lamp.png` uncommon  |
+| 3   | `items/thorn_bark.png` uncommon | `items/jade_leaf.png` uncommon   | `items/war_drum.png` rare        | `items/mirror_shard.png` rare  |
+| 4   | `items/blood_contract.png` rare | `items/bone_ring.png` rare       | `items/phoenix_ember.png` epic   | `items/black_star.png` epic    |
+| 5   | `actors/hero.png`               | `actors/slime.png`               | `actors/rat.png`                 | `actors/imp.png`               |
+| 6   | `actors/brute.png`              | `actors/boss.png`                | `ui/empty_slot.png`              | `ui/reward_chest.png`          |
 
 ## Prompt Template
 
