@@ -81,7 +81,7 @@ export function createGame(seed = "daily-seed", content = defaultContent): GameS
   }
   syncPlayerStats(state, content, true);
   generateRewards(state, content);
-  pushLog(state, `Seed ${seed}: 先选一个奖励，再开战。`);
+  pushLog(state, `远征 ${seed}: 先选一个战利品。`);
   return state;
 }
 
@@ -142,7 +142,7 @@ export function dispatchCommand(
       const placed = addItemFirstOpen(state, command.itemId, content);
       if (placed) {
         syncPlayerStats(state, content, true);
-        pushLog(state, `Debug: 加入 ${getItemDef(content, command.itemId).name}。`);
+        pushLog(state, `营地补给：加入 ${getItemDef(content, command.itemId).name}。`);
       }
       return state;
     }
@@ -150,7 +150,7 @@ export function dispatchCommand(
     case "debugHeal": {
       syncPlayerStats(state, content, false);
       state.player.hp = state.player.maxHp;
-      pushLog(state, "Debug: 生命回满。");
+      pushLog(state, "营地补给：生命回满。");
       return state;
     }
   }
@@ -585,7 +585,7 @@ function completeWave(state: GameState, content: GameContent): void {
   if (state.waveIndex >= content.waves.length - 1) {
     state.phase = "victory";
     state.endReason = "击败矿心 Boss";
-    pushLog(state, `胜利！分享码 ${createShareCode(state)}`);
+    pushLog(state, `胜利！纹章 ${createShareCode(state)}`);
     return;
   }
 
