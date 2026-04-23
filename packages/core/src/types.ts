@@ -139,6 +139,65 @@ export interface CombatClock {
   dotTimerMs: number;
 }
 
+export type DamageKind = "attack" | "burn" | "poison" | "thorns";
+
+export type CombatEvent =
+  | {
+      id: number;
+      timeMs: number;
+      type: "waveStart";
+      waveIndex: number;
+      waveName: string;
+    }
+  | {
+      id: number;
+      timeMs: number;
+      type: "waveClear";
+      waveIndex: number;
+      waveName: string;
+    }
+  | {
+      id: number;
+      timeMs: number;
+      type: "damage";
+      targetId: string;
+      targetDefId: string;
+      targetLane: number;
+      targetSlot: number;
+      amount: number;
+      kind: DamageKind;
+      critical: boolean;
+      sourceIds: string[];
+    }
+  | {
+      id: number;
+      timeMs: number;
+      type: "enemyAttack";
+      enemyId: string;
+      enemyDefId: string;
+      enemyLane: number;
+      enemySlot: number;
+      amount: number;
+    }
+  | {
+      id: number;
+      timeMs: number;
+      type: "kill";
+      targetId: string;
+      targetDefId: string;
+      targetLane: number;
+      targetSlot: number;
+    }
+  | {
+      id: number;
+      timeMs: number;
+      type: "fusionComplete";
+      resultItemId: string;
+      resultInstanceId: string;
+      x: number;
+      y: number;
+    };
+
 export interface PlayerState {
   hp: number;
   maxHp: number;
@@ -161,6 +220,8 @@ export interface GameState {
   enemies: EnemyInstance[];
   pendingFusions: PendingFusion[];
   combat: CombatClock;
+  combatEvents: CombatEvent[];
+  nextCombatEventId: number;
   totals: DamageTotals;
   log: string[];
   endReason: string | null;
@@ -229,6 +290,7 @@ export interface GameSnapshot {
   rewards: ItemDef[];
   enemies: EnemySnapshot[];
   fusionPreviews: FusionPreview[];
+  combatEvents: CombatEvent[];
   totals: DamageTotals;
   log: string[];
   shareCode: string;

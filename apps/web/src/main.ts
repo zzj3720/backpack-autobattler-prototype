@@ -157,6 +157,45 @@ interface Point {
   y: number;
 }
 
+interface FloatingText {
+  id: number;
+  x: number;
+  y: number;
+  dx: number;
+  value: string;
+  color: string;
+  size: number;
+  outline: string;
+  startedAt: number;
+  durationMs: number;
+}
+
+interface EnemyHitEffect {
+  until: number;
+  color: string;
+  critical: boolean;
+}
+
+interface StrikeEffect {
+  id: number;
+  from: Point;
+  to: Point;
+  color: string;
+  startedAt: number;
+  durationMs: number;
+  critical: boolean;
+}
+
+interface ImpactBurst {
+  id: number;
+  x: number;
+  y: number;
+  color: string;
+  startedAt: number;
+  durationMs: number;
+  radius: number;
+}
+
 const canvas = document.querySelector<HTMLCanvasElement>("#game");
 if (!canvas) {
   throw new Error("Missing #game canvas.");
@@ -178,6 +217,14 @@ let hitZones: HitZone[] = [];
 let battleBannerUntilMs = 0;
 let backpackVisualY = BAG_OPEN_Y;
 let landscapeLockRequested = false;
+let lastCombatEventId = 0;
+let screenShakeUntil = 0;
+let screenShakeStrength = 0;
+const floatingTexts: FloatingText[] = [];
+const enemyHitEffects = new Map<string, EnemyHitEffect>();
+const itemPulseUntil = new Map<string, number>();
+const strikeEffects: StrikeEffect[] = [];
+const impactBursts: ImpactBurst[] = [];
 const debugWindow = window as typeof window & {
   __backpackDebug?: () => GameSnapshot;
   __backpackDebugForceResult?: (phase?: "victory" | "defeat") => GameSnapshot;
@@ -284,13 +331,21 @@ function frame(now: number): void {
 function render(): void {
   syncCanvasScale();
   snapshot = querySnapshot(state);
+  const now = performance.now();
+  consumeCombatEvents(now);
+  pruneCombatVisuals(now);
   hitZones = [];
   const hoveredItem =
     !draggingItemId && snapshot.phase === "draft" ? itemAt(pointer.x, pointer.y) : null;
   ctx.clearRect(0, 0, WIDTH, HEIGHT);
   drawBackground();
   drawHeader();
+  const shake = screenShakeOffset(now);
+  ctx.save();
+  ctx.translate(shake.x, shake.y);
   drawArena();
+  drawCombatEffects(now);
+  ctx.restore();
   drawRewardChoices();
   drawBackpack(hoveredItem);
   drawSidePanel();
@@ -404,6 +459,7 @@ function drawBackpack(hoveredItem: ItemSnapshot | null): void {
 
   if (!open) {
     text("行囊已收起", BAG_X + BAG_W / 2, bagY + 22, 15, "#d6c5a1", "center");
+    drawClosedBagItemPulses(bagY);
     return;
   }
 
@@ -425,6 +481,10 @@ function drawBackpack(hoveredItem: ItemSnapshot | null): void {
   for (const item of snapshot.items) {
     const px = origin.x + item.instance.x * CELL + 2;
     const py = origin.y + item.instance.y * CELL + 2;
+    const pulse = itemPulseAlpha(item.instance.id, performance.now());
+    if (pulse > 0) {
+      drawItemPulse(px - 2, py - 2, CELL - 4, pulse);
+    }
     const frameSprite =
       item.def.rarity === "rare" || item.def.rarity === "epic"
         ? uiSprites.frameRare
@@ -604,6 +664,7 @@ function drawPlayer(x: number, y: number): void {
 }
 
 function drawEnemies(): void {
+  const now = performance.now();
   const laneCounts = [0, 0, 0];
   if (snapshot.enemies.length === 0) {
     drawActorShadow(1010, 448, 170, 34);
@@ -619,9 +680,23 @@ function drawEnemies(): void {
     const y = 270 + laneIndex * 118;
     const spriteId = enemy.def.spriteId ?? enemy.def.id;
     const size = spriteId === "boss" ? 158 : 116;
+    const hit = enemyHitEffects.get(enemy.instance.id);
+    const hitAlpha = hit ? Math.max(0, Math.min(1, (hit.until - now) / 240)) : 0;
+    const hitBoost = hitAlpha * (hit?.critical ? 12 : 6);
     drawActorShadow(x, y + size * 0.42, size, 22);
-    if (!drawActorSprite(actorSprites[spriteId], x - size / 2, y - size / 2, size, size)) {
+    if (
+      !drawActorSprite(
+        actorSprites[spriteId],
+        x - (size + hitBoost) / 2,
+        y - (size + hitBoost) / 2,
+        size + hitBoost,
+        size + hitBoost,
+      )
+    ) {
       text(enemy.def.symbol, x, y - 10, 13, "#fff4df", "center", "monospace");
+    }
+    if (hitAlpha > 0) {
+      drawHitFlash(x, y, size, hit.color, hitAlpha);
     }
     drawBar(x - size / 2, y + size * 0.48, size, 7, enemy.instance.hp / enemy.def.maxHp, "#cf4e4e");
   }
@@ -668,6 +743,7 @@ function restartRun(): void {
   state = dispatchCommand(state, { type: "restart", seed: randomSeed() });
   paused = false;
   backpackVisualY = BAG_OPEN_Y;
+  clearCombatVisuals();
 }
 
 function capturePointer(pointerId: number): void {
@@ -697,6 +773,402 @@ function requestLandscapeViewport(): void {
     lock?: (orientation: OrientationLockType) => Promise<void>;
   };
   void orientation.lock?.("landscape").catch(() => undefined);
+}
+
+function consumeCombatEvents(now: number): void {
+  for (const event of snapshot.combatEvents) {
+    if (event.id <= lastCombatEventId) {
+      continue;
+    }
+    lastCombatEventId = Math.max(lastCombatEventId, event.id);
+    handleCombatEvent(event, now);
+  }
+}
+
+function handleCombatEvent(event: GameSnapshot["combatEvents"][number], now: number): void {
+  switch (event.type) {
+    case "waveStart":
+      addFloatingText({
+        id: event.id,
+        x: WIDTH / 2,
+        y: 112,
+        dx: 0,
+        value: "开战",
+        color: "#f3d18a",
+        size: 22,
+        outline: "rgba(34, 17, 8, 0.85)",
+        startedAt: now,
+        durationMs: 780,
+      });
+      return;
+
+    case "waveClear":
+      addFloatingText({
+        id: event.id,
+        x: WIDTH / 2,
+        y: 178,
+        dx: 0,
+        value: "清空",
+        color: "#dfffe7",
+        size: 24,
+        outline: "rgba(18, 32, 23, 0.9)",
+        startedAt: now,
+        durationMs: 980,
+      });
+      return;
+
+    case "damage": {
+      const point = enemyPoint(event.targetLane, event.targetSlot);
+      const color = damageColor(event.kind, event.critical);
+      enemyHitEffects.set(event.targetId, {
+        until: now + (event.critical ? 360 : 250),
+        color,
+        critical: event.critical,
+      });
+      addFloatingText({
+        id: event.id,
+        x: point.x + jitter(event.id, 18),
+        y: point.y - 58 + jitter(event.id + 11, 10),
+        dx: jitter(event.id + 21, 18),
+        value: `${event.critical ? "暴击 " : ""}${formatDamage(event.amount)}`,
+        color,
+        size: event.critical ? 24 : 17,
+        outline: "rgba(6, 7, 6, 0.9)",
+        startedAt: now,
+        durationMs: event.critical ? 850 : 720,
+      });
+      addImpactBurst(point.x, point.y, color, now, event.critical ? 34 : 22, event.id);
+      if (event.kind === "attack") {
+        addStrike({ x: 214, y: 372 }, point, color, now, event.critical, event.id);
+      }
+      for (const sourceId of event.sourceIds) {
+        itemPulseUntil.set(sourceId, now + 620);
+      }
+      if (event.critical) {
+        bumpScreenShake(now, 9, 220);
+      }
+      return;
+    }
+
+    case "enemyAttack": {
+      const point = enemyPoint(event.enemyLane, event.enemySlot);
+      addStrike(point, { x: 210, y: 452 }, "#ff7474", now, false, event.id);
+      addFloatingText({
+        id: event.id,
+        x: 210 + jitter(event.id, 20),
+        y: 430,
+        dx: 0,
+        value: `-${formatDamage(event.amount)}`,
+        color: "#ff8b7a",
+        size: 18,
+        outline: "rgba(24, 6, 4, 0.9)",
+        startedAt: now,
+        durationMs: 720,
+      });
+      bumpScreenShake(now, 4, 140);
+      return;
+    }
+
+    case "kill": {
+      const point = enemyPoint(event.targetLane, event.targetSlot);
+      addImpactBurst(point.x, point.y, "#f3d18a", now, 48, event.id);
+      addFloatingText({
+        id: event.id,
+        x: point.x,
+        y: point.y - 86,
+        dx: 0,
+        value: "击破",
+        color: "#fff2c4",
+        size: 20,
+        outline: "rgba(24, 13, 4, 0.92)",
+        startedAt: now,
+        durationMs: 900,
+      });
+      return;
+    }
+
+    case "fusionComplete":
+      itemPulseUntil.set(event.resultInstanceId, now + 900);
+      addFloatingText({
+        id: event.id,
+        x: BAG_X + BAG_W / 2,
+        y: BAG_CLOSED_Y - 18,
+        dx: 0,
+        value: "合成完成",
+        color: "#74f5c3",
+        size: 20,
+        outline: "rgba(7, 20, 15, 0.92)",
+        startedAt: now,
+        durationMs: 960,
+      });
+      return;
+  }
+}
+
+function addFloatingText(textEffect: FloatingText): void {
+  floatingTexts.push(textEffect);
+}
+
+function addStrike(
+  from: Point,
+  to: Point,
+  color: string,
+  now: number,
+  critical: boolean,
+  id: number,
+): void {
+  strikeEffects.push({
+    id,
+    from,
+    to,
+    color,
+    startedAt: now,
+    durationMs: critical ? 260 : 190,
+    critical,
+  });
+}
+
+function addImpactBurst(
+  x: number,
+  y: number,
+  color: string,
+  now: number,
+  radius: number,
+  id: number,
+) {
+  impactBursts.push({
+    id,
+    x,
+    y,
+    color,
+    startedAt: now,
+    durationMs: 420,
+    radius,
+  });
+}
+
+function bumpScreenShake(now: number, strength: number, durationMs: number): void {
+  screenShakeStrength = Math.max(screenShakeStrength, strength);
+  screenShakeUntil = Math.max(screenShakeUntil, now + durationMs);
+}
+
+function drawCombatEffects(now: number): void {
+  drawStrikes(now);
+  drawImpactBursts(now);
+  drawFloatingTexts(now);
+}
+
+function drawStrikes(now: number): void {
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.globalCompositeOperation = "screen";
+  for (const strike of strikeEffects) {
+    const progress = Math.max(0, Math.min(1, (now - strike.startedAt) / strike.durationMs));
+    const alpha = 1 - progress;
+    const head = easeOutCubic(progress);
+    const tail = Math.max(0, head - 0.28);
+    const start = lerpPoint(strike.from, strike.to, tail);
+    const end = lerpPoint(strike.from, strike.to, head);
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = strike.color;
+    ctx.lineWidth = strike.critical ? 8 : 5;
+    line(start.x, start.y, end.x, end.y);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.78)";
+    ctx.lineWidth = strike.critical ? 3 : 2;
+    line(start.x, start.y, end.x, end.y);
+  }
+  ctx.restore();
+}
+
+function drawImpactBursts(now: number): void {
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  for (const burst of impactBursts) {
+    const progress = Math.max(0, Math.min(1, (now - burst.startedAt) / burst.durationMs));
+    const alpha = 1 - progress;
+    const radius = 8 + burst.radius * easeOutCubic(progress);
+    ctx.globalAlpha = alpha * 0.74;
+    ctx.strokeStyle = burst.color;
+    ctx.lineWidth = Math.max(1, 4 * alpha);
+    ctx.beginPath();
+    ctx.arc(burst.x, burst.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = alpha * 0.28;
+    ctx.fillStyle = burst.color;
+    ctx.beginPath();
+    ctx.arc(burst.x, burst.y, radius * 0.42, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawFloatingTexts(now: number): void {
+  ctx.save();
+  for (const float of floatingTexts) {
+    const progress = Math.max(0, Math.min(1, (now - float.startedAt) / float.durationMs));
+    const alpha = 1 - progress;
+    const x = float.x + float.dx * progress;
+    const y = float.y - 46 * easeOutCubic(progress);
+    ctx.globalAlpha = alpha;
+    text(float.value, x, y, float.size, float.color, "center", undefined, float.outline);
+  }
+  ctx.restore();
+}
+
+function drawHitFlash(x: number, y: number, size: number, color: string, alpha: number): void {
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ctx.globalAlpha = alpha * 0.48;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.ellipse(x, y, size * 0.42, size * 0.36, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = alpha * 0.32;
+  ctx.strokeStyle = "#fff7d6";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.ellipse(x, y, size * 0.48, size * 0.4, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawItemPulse(x: number, y: number, size: number, alpha: number): void {
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = "#74f5c3";
+  ctx.lineWidth = 4;
+  roundRect(x - 2, y - 2, size + 4, size + 4, 8, false);
+  ctx.globalAlpha = alpha * 0.18;
+  ctx.fillStyle = "#74f5c3";
+  roundRect(x, y, size, size, 8, true);
+  ctx.restore();
+}
+
+function drawClosedBagItemPulses(bagY: number): void {
+  const now = performance.now();
+  const activeItems = snapshot.items
+    .filter((item) => itemPulseAlpha(item.instance.id, now) > 0)
+    .slice(0, 5);
+  if (activeItems.length === 0) {
+    return;
+  }
+
+  const iconSize = 34;
+  const gap = 6;
+  const totalW = activeItems.length * iconSize + (activeItems.length - 1) * gap;
+  let x = BAG_X + BAG_W / 2 - totalW / 2;
+  const y = bagY + 34;
+  for (const item of activeItems) {
+    const alpha = itemPulseAlpha(item.instance.id, now);
+    ctx.save();
+    ctx.globalAlpha = 0.66 + alpha * 0.34;
+    drawItemPulse(x - 3, y - 3, iconSize + 6, alpha);
+    drawSprite(itemSprites[item.def.id], x, y, iconSize, iconSize, 4);
+    ctx.restore();
+    x += iconSize + gap;
+  }
+}
+
+function pruneCombatVisuals(now: number): void {
+  removeExpired(floatingTexts, (item) => now - item.startedAt <= item.durationMs);
+  removeExpired(strikeEffects, (item) => now - item.startedAt <= item.durationMs);
+  removeExpired(impactBursts, (item) => now - item.startedAt <= item.durationMs);
+  for (const [id, effect] of enemyHitEffects) {
+    if (effect.until <= now) {
+      enemyHitEffects.delete(id);
+    }
+  }
+  for (const [id, until] of itemPulseUntil) {
+    if (until <= now) {
+      itemPulseUntil.delete(id);
+    }
+  }
+  if (screenShakeUntil <= now) {
+    screenShakeStrength = 0;
+  }
+}
+
+function clearCombatVisuals(): void {
+  lastCombatEventId = 0;
+  screenShakeUntil = 0;
+  screenShakeStrength = 0;
+  floatingTexts.length = 0;
+  strikeEffects.length = 0;
+  impactBursts.length = 0;
+  enemyHitEffects.clear();
+  itemPulseUntil.clear();
+}
+
+function screenShakeOffset(now: number): Point {
+  if (screenShakeUntil <= now || screenShakeStrength <= 0) {
+    return { x: 0, y: 0 };
+  }
+  const progress = Math.max(0, Math.min(1, (screenShakeUntil - now) / 240));
+  const amount = screenShakeStrength * progress;
+  return {
+    x: Math.sin(now * 0.09) * amount,
+    y: Math.cos(now * 0.11) * amount * 0.62,
+  };
+}
+
+function itemPulseAlpha(instanceId: string, now: number): number {
+  const until = itemPulseUntil.get(instanceId) ?? 0;
+  return Math.max(0, Math.min(1, (until - now) / 620));
+}
+
+function enemyPoint(lane: number, slot: number): Point {
+  return {
+    x: 925 + Math.max(0, slot) * 100,
+    y: 270 + Math.max(0, Math.min(2, lane)) * 118,
+  };
+}
+
+function damageColor(kind: "attack" | "burn" | "poison" | "thorns", critical: boolean): string {
+  if (critical) {
+    return "#fff2c4";
+  }
+  switch (kind) {
+    case "attack":
+      return "#f3d18a";
+    case "burn":
+      return "#ff8a3d";
+    case "poison":
+      return "#74f5a0";
+    case "thorns":
+      return "#9ddcff";
+  }
+}
+
+function formatDamage(amount: number): string {
+  return `${Math.max(1, Math.round(amount))}`;
+}
+
+function jitter(id: number, amount: number): number {
+  const raw = Math.sin(id * 12.9898) * 43758.5453;
+  return (raw - Math.floor(raw) - 0.5) * amount;
+}
+
+function lerpPoint(from: Point, to: Point, ratio: number): Point {
+  return {
+    x: from.x + (to.x - from.x) * ratio,
+    y: from.y + (to.y - from.y) * ratio,
+  };
+}
+
+function easeOutCubic(value: number): number {
+  return 1 - (1 - value) ** 3;
+}
+
+function removeExpired<T>(items: T[], keep: (item: T) => boolean): void {
+  let writeIndex = 0;
+  for (const item of items) {
+    if (keep(item)) {
+      items[writeIndex] = item;
+      writeIndex += 1;
+    }
+  }
+  items.length = writeIndex;
 }
 
 function drawBattleLedger(): void {

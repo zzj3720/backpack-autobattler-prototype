@@ -5,6 +5,8 @@ import {
   GRID_HEIGHT,
   GRID_WIDTH,
   type BuildSnapshot,
+  type CombatEvent,
+  type DamageKind,
   type DamageTotals,
   type EffectDef,
   type EnemyDef,
@@ -41,6 +43,7 @@ const RARITY_WEIGHT: Record<Rarity, number> = {
   rare: 2,
   epic: 0.65,
 };
+const MAX_COMBAT_EVENTS = 80;
 
 const STARTER_ITEMS = [
   { itemId: "wooden_shield", x: 0, y: 1 },
@@ -74,6 +77,8 @@ export function createGame(seed = "daily-seed", content = defaultContent): GameS
     enemies: [],
     pendingFusions: [],
     combat: { playerAttackTimerMs: 0, dotTimerMs: 0 },
+    combatEvents: [],
+    nextCombatEventId: 1,
     totals: createDamageTotals(),
     log: [],
     endReason: null,
@@ -139,6 +144,11 @@ export function dispatchCommand(
       state.combat.playerAttackTimerMs = 180;
       state.combat.dotTimerMs = 500;
       pushLog(state, `${currentWave(content, state).name} 开始。`);
+      pushCombatEvent(state, {
+        type: "waveStart",
+        waveIndex: state.waveIndex,
+        waveName: currentWave(content, state).name,
+      });
       if (state.pendingFusions.length > 0) {
         pushLog(state, `战后合成预备：${formatPendingFusionSummary(state, content)}。`);
       }
@@ -298,6 +308,7 @@ export function querySnapshot(state: GameState, content = defaultContent): GameS
       def: getEnemyDef(content, enemy.defId),
     })),
     fusionPreviews: createFusionPreviews(state, content),
+    combatEvents: state.combatEvents.slice(),
     totals: cloneTotals(state.totals),
     log: state.log.slice(-8),
     shareCode: createShareCode(state),
@@ -480,6 +491,13 @@ function applyFusionMatch(state: GameState, content: GameContent, match: FusionM
   const result = addItemAt(state, match.recipe.resultItemId, x, y, content);
   const resultName = getItemDef(content, result.defId).name;
   pushLog(state, `战后合成 ${ingredientNames.join(" + ")} -> ${resultName}。`);
+  pushCombatEvent(state, {
+    type: "fusionComplete",
+    resultItemId: result.defId,
+    resultInstanceId: result.id,
+    x: result.x,
+    y: result.y,
+  });
 }
 
 function formatPendingFusionSummary(state: GameState, content: GameContent): string {
@@ -707,6 +725,8 @@ function playerAttack(state: GameState, build: BuildSnapshot, content: GameConte
     splitDamageByStat(build, "attack", rawDamage),
     content,
     false,
+    "attack",
+    crit > 1,
   );
 }
 
@@ -720,6 +740,8 @@ function applyDots(state: GameState, build: BuildSnapshot, content: GameContent)
         splitDamageByStat(build, "burn", build.stats.burn * 0.55),
         content,
         true,
+        "burn",
+        false,
       );
     }
   }
@@ -734,6 +756,8 @@ function applyDots(state: GameState, build: BuildSnapshot, content: GameContent)
         splitDamageByStat(build, "poison", build.stats.poison * 0.9),
         content,
         true,
+        "poison",
+        false,
       );
     }
   }
@@ -749,6 +773,15 @@ function enemyAttack(
   const damage = Math.max(1, enemyDef.attack - build.stats.armor * 0.7);
   state.player.hp -= damage;
   state.totals.damageTaken += damage;
+  const enemyTarget = enemyCombatTarget(state, enemy);
+  pushCombatEvent(state, {
+    type: "enemyAttack",
+    enemyId: enemy.id,
+    enemyDefId: enemy.defId,
+    enemyLane: enemyTarget.lane,
+    enemySlot: enemyTarget.slot,
+    amount: damage,
+  });
 
   if (build.stats.thorns > 0) {
     dealEnemyDamage(
@@ -758,6 +791,8 @@ function enemyAttack(
       splitDamageByStat(build, "thorns", build.stats.thorns),
       content,
       true,
+      "thorns",
+      false,
     );
   }
 }
@@ -769,23 +804,53 @@ function dealEnemyDamage(
   sources: Array<{ sourceId: string; amount: number }>,
   content: GameContent,
   ignoreArmor: boolean,
+  kind: DamageKind,
+  critical: boolean,
 ): void {
   if (enemy.hp <= 0 || rawDamage <= 0) {
     return;
   }
   const enemyDef = getEnemyDef(content, enemy.defId);
+  const target = enemyCombatTarget(state, enemy);
   const damage = ignoreArmor ? rawDamage : Math.max(1, rawDamage - enemyDef.armor * 0.65);
   const actual = Math.min(enemy.hp, damage);
   enemy.hp -= actual;
   state.totals.damageDone += actual;
 
   const sourceTotal = sources.reduce((sum, source) => sum + source.amount, 0);
+  const sourceIds: string[] = [];
   if (sourceTotal <= 0) {
     addDamageSource(state, "base", actual);
-    return;
+  } else {
+    for (const source of sources) {
+      const sourceDamage = actual * (source.amount / sourceTotal);
+      addDamageSource(state, source.sourceId, sourceDamage);
+      if (source.sourceId !== "base" && sourceDamage > 0.05) {
+        sourceIds.push(source.sourceId);
+      }
+    }
   }
-  for (const source of sources) {
-    addDamageSource(state, source.sourceId, actual * (source.amount / sourceTotal));
+
+  pushCombatEvent(state, {
+    type: "damage",
+    targetId: enemy.id,
+    targetDefId: enemy.defId,
+    targetLane: target.lane,
+    targetSlot: target.slot,
+    amount: actual,
+    kind,
+    critical,
+    sourceIds,
+  });
+
+  if (enemy.hp <= 0) {
+    pushCombatEvent(state, {
+      type: "kill",
+      targetId: enemy.id,
+      targetDefId: enemy.defId,
+      targetLane: target.lane,
+      targetSlot: target.slot,
+    });
   }
 }
 
@@ -811,6 +876,19 @@ function addDamageSource(state: GameState, sourceId: string, amount: number): vo
   state.totals.damageByItem[sourceId] = (state.totals.damageByItem[sourceId] ?? 0) + amount;
 }
 
+function enemyCombatTarget(state: GameState, enemy: EnemyInstance): { lane: number; slot: number } {
+  let slot = 0;
+  for (const candidate of state.enemies) {
+    if (candidate.id === enemy.id) {
+      break;
+    }
+    if (candidate.lane === enemy.lane) {
+      slot += 1;
+    }
+  }
+  return { lane: enemy.lane, slot };
+}
+
 function removeDeadEnemies(state: GameState): void {
   const before = state.enemies.length;
   state.enemies = state.enemies.filter((enemy) => enemy.hp > 0);
@@ -823,6 +901,11 @@ function removeDeadEnemies(state: GameState): void {
 function completeWave(state: GameState, content: GameContent): void {
   const waveName = currentWave(content, state).name;
   pushLog(state, `${waveName} 清空。`);
+  pushCombatEvent(state, {
+    type: "waveClear",
+    waveIndex: state.waveIndex,
+    waveName,
+  });
   applyPendingFusions(state, content);
 
   if (state.waveIndex >= content.waves.length - 1) {
@@ -993,5 +1076,17 @@ function pushLog(state: GameState, line: string): void {
   state.log.push(line);
   if (state.log.length > 40) {
     state.log.shift();
+  }
+}
+
+function pushCombatEvent(state: GameState, event: Omit<CombatEvent, "id" | "timeMs">): void {
+  state.combatEvents.push({
+    ...event,
+    id: state.nextCombatEventId,
+    timeMs: state.timeMs,
+  } as CombatEvent);
+  state.nextCombatEventId += 1;
+  if (state.combatEvents.length > MAX_COMBAT_EVENTS) {
+    state.combatEvents.splice(0, state.combatEvents.length - MAX_COMBAT_EVENTS);
   }
 }

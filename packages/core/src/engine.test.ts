@@ -56,6 +56,12 @@ describe("backpack core", () => {
     assert.equal(state.phase, "draft");
     assert.equal(state.waveIndex, 1);
     assert.ok(state.totals.kills > 0);
+
+    const events = querySnapshot(state).combatEvents;
+    assert.ok(events.some((event) => event.type === "waveStart"));
+    assert.ok(events.some((event) => event.type === "damage"));
+    assert.ok(events.some((event) => event.type === "kill"));
+    assert.ok(events.some((event) => event.type === "waveClear"));
   });
 
   it("previews adjacent fusions and resolves them after a battle", () => {
