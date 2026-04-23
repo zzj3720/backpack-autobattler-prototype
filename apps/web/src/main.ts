@@ -29,9 +29,9 @@ const BAG_W = Math.round(BAG_H * (BAG_SOURCE_W / BAG_SOURCE_H));
 const BAG_X = (WIDTH - BAG_W) / 2;
 const BAG_OPEN_Y = 226;
 const BAG_CLOSED_Y = 690;
-const REWARD_CARD_W = 320;
-const REWARD_CARD_H = 80;
-const REWARD_CARD_GAP = 20;
+const REWARD_CARD_W = 400;
+const REWARD_CARD_H = 120;
+const REWARD_CARD_GAP = 18;
 
 const rarityLabel: Record<Rarity, string> = {
   common: "普通",
@@ -590,19 +590,19 @@ function rewardCard(x: number, y: number, item: ItemDef): void {
     pointer.y <= y + REWARD_CARD_H;
   const cardSprite = rewardCardSprites[item.rarity];
   drawSprite(hovered ? cardSprite.hover : cardSprite.normal, x, y, REWARD_CARD_W, REWARD_CARD_H, 0);
-  drawSprite(itemSprites[item.id], x + 19, y + 13, 54, 54, 5);
-  const textX = x + 96;
-  const textW = 174;
-  fittedText(item.name, textX, y + 13, textW, 15, "#f5f0dc");
-  fittedText(
-    `${rarityLabel[item.rarity]} | ${rewardStatSummary(item)}`,
-    textX,
-    y + 34,
-    textW,
-    12,
-    "#9cb4bd",
-  );
-  fittedText(rewardEffectSummary(item), textX, y + 54, textW, 12, "#f3d18a");
+  drawSprite(itemSprites[item.id], x + 25, y + 27, 66, 66, 5);
+  const textX = x + 140;
+  const textY = y + 34;
+  const textW = 178;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(textX, textY, textW, 58);
+  ctx.clip();
+  fittedText(item.name, textX, textY, textW, 16, "#fff2c4");
+  text(rarityLabel[item.rarity], textX, textY + 23, 10, "#9cb4bd");
+  fittedText(rewardPrimaryStat(item), textX + 38, textY + 21, textW - 38, 13, "#f3d18a");
+  fittedText(shortRewardEffectSummary(item), textX, textY + 42, textW, 12, "#d6e2c4");
+  ctx.restore();
   hitZones.push({
     x,
     y,
@@ -614,16 +614,14 @@ function rewardCard(x: number, y: number, item: ItemDef): void {
   });
 }
 
-function rewardStatSummary(item: ItemDef): string {
-  const stats = statLines({ ...zeroStats(), ...item.stats });
-  return stats.length > 0 ? stats.slice(0, 2).join(" / ") : "无基础数值";
+function rewardPrimaryStat(item: ItemDef): string {
+  const stat = statPairs({ ...zeroStats(), ...item.stats })[0];
+  return stat ? `${stat.label} ${stat.value}` : "无基础数值";
 }
 
-function rewardEffectSummary(item: ItemDef): string {
-  if (item.effects.length === 0) {
-    return item.description;
-  }
-  return item.effects.slice(0, 2).map(effectDescription).join("；");
+function shortRewardEffectSummary(item: ItemDef): string {
+  const effect = item.effects[0];
+  return effect ? shortEffectDescription(effect) : item.description;
 }
 
 function drawResultCard(): void {
@@ -762,10 +760,6 @@ function drawItemTooltip(item: ItemSnapshot): void {
   }
 }
 
-function statLines(stats: Stats): string[] {
-  return statPairs(stats).map(({ label, value }) => `${label} ${value}`);
-}
-
 function statPairs(stats: Stats): Array<{ label: string; value: string }> {
   return (Object.entries(stats) as Array<[keyof Stats, number]>)
     .filter(([, value]) => Math.abs(value) > 0.001)
@@ -796,6 +790,22 @@ function effectDescription(effect: EffectDef): string {
       return `每个空邻格 ${amount}`;
     case "lowHp":
       return `生命低于 ${Math.round(effect.threshold * 100)}% ${amount}`;
+  }
+}
+
+function shortEffectDescription(effect: EffectDef): string {
+  const amount = `${statLabel[effect.stat]} ${effect.amount > 0 ? "+" : ""}${fmtStat(effect.stat, effect.amount)}`;
+  switch (effect.type) {
+    case "adjacentTag":
+      return `邻接${formatTag(effect.tag)}: ${amount}`;
+    case "sameRowTag":
+      return `同行${formatTag(effect.tag)}: ${amount}`;
+    case "corner":
+      return `角落位: ${amount}`;
+    case "emptyNeighbor":
+      return `空邻格: ${amount}`;
+    case "lowHp":
+      return `低血量: ${amount}`;
   }
 }
 
