@@ -87,6 +87,18 @@ const itemSprites: Record<string, string> = {
   bone_ring: `${spriteBase}/items/bone_ring.png`,
   phoenix_ember: `${spriteBase}/items/phoenix_ember.png`,
   black_star: `${spriteBase}/items/black_star.png`,
+  venom_gland: `${spriteBase}/items/venom_gland.png`,
+  serpent_censer: `${spriteBase}/items/serpent_censer.png`,
+  plague_idol: `${spriteBase}/items/plague_idol.png`,
+  ember_saber: `${spriteBase}/items/ember_saber.png`,
+  forge_heart: `${spriteBase}/items/forge_heart.png`,
+  clockwork_halberd: `${spriteBase}/items/clockwork_halberd.png`,
+  siege_chime: `${spriteBase}/items/siege_chime.png`,
+  guardian_root: `${spriteBase}/items/guardian_root.png`,
+  elder_moss: `${spriteBase}/items/elder_moss.png`,
+  moon_eye: `${spriteBase}/items/moon_eye.png`,
+  astral_core: `${spriteBase}/items/astral_core.png`,
+  lich_crown: `${spriteBase}/items/lich_crown.png`,
 };
 const actorSprites: Record<string, string> = {
   hero: `${spriteBase}/actors/hero.png`,

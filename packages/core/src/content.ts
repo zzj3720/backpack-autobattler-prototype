@@ -17,10 +17,11 @@ export function validateContent(content: GameContent): GameContent {
   const parsed = content;
   if (
     !Array.isArray(parsed.items) ||
+    !Array.isArray(parsed.fusions) ||
     !Array.isArray(parsed.enemies) ||
     !Array.isArray(parsed.waves)
   ) {
-    throw new Error("Content must contain item, enemy, and wave arrays.");
+    throw new Error("Content must contain item, fusion, enemy, and wave arrays.");
   }
 
   for (const item of parsed.items) {
@@ -56,12 +57,34 @@ export function validateContent(content: GameContent): GameContent {
 
   const itemIds = new Set(parsed.items.map((item) => item.id));
   const enemyIds = new Set(parsed.enemies.map((enemy) => enemy.id));
+  const fusionIds = new Set(parsed.fusions.map((fusion) => fusion.id));
 
   if (itemIds.size !== parsed.items.length) {
     throw new Error("Duplicate item id in content.");
   }
   if (enemyIds.size !== parsed.enemies.length) {
     throw new Error("Duplicate enemy id in content.");
+  }
+  if (fusionIds.size !== parsed.fusions.length) {
+    throw new Error("Duplicate fusion id in content.");
+  }
+
+  for (const fusion of parsed.fusions) {
+    assertNonEmptyString(fusion.id, "fusion.id");
+    if (!Array.isArray(fusion.ingredients) || fusion.ingredients.length < 2) {
+      throw new Error(`Fusion ${fusion.id} must have at least two ingredients.`);
+    }
+    if (!itemIds.has(fusion.resultItemId)) {
+      throw new Error(`Fusion ${fusion.id} references missing result ${fusion.resultItemId}.`);
+    }
+    if (fusion.ingredients.includes(fusion.resultItemId)) {
+      throw new Error(`Fusion ${fusion.id} cannot produce one of its ingredients.`);
+    }
+    for (const itemId of fusion.ingredients) {
+      if (!itemIds.has(itemId)) {
+        throw new Error(`Fusion ${fusion.id} references missing ingredient ${itemId}.`);
+      }
+    }
   }
 
   for (const wave of parsed.waves) {
@@ -366,6 +389,286 @@ export const defaultContent = validateContent({
         },
       ],
       description: "脆，但结算数字很好看。",
+    },
+    {
+      id: "venom_gland",
+      name: "蛇毒腺",
+      symbol: "VG",
+      rarity: "uncommon",
+      tags: ["poison", "nature"],
+      stats: { poison: 3, attackSpeed: 0.1 },
+      effects: [
+        {
+          type: "adjacentTag",
+          tag: "weapon",
+          stat: "poison",
+          amount: 2,
+          label: "贴武器 +2 毒",
+        },
+      ],
+      description: "毒炼流派的中段核心，贴着武器时叠毒更快。",
+    },
+    {
+      id: "serpent_censer",
+      name: "蛇烟炉",
+      symbol: "SC",
+      rarity: "rare",
+      tags: ["poison", "alchemy"],
+      stats: { poison: 5, regen: 0.25 },
+      effects: [
+        {
+          type: "sameRowTag",
+          tag: "poison",
+          stat: "poison",
+          amount: 2,
+          label: "同行毒系 +2 毒",
+        },
+      ],
+      description: "让毒系物品排成一线，慢慢把怪物拖垮。",
+    },
+    {
+      id: "plague_idol",
+      name: "疫病神像",
+      symbol: "PI",
+      rarity: "epic",
+      tags: ["poison", "curse", "trinket"],
+      stats: { poison: 8, maxHp: -8 },
+      effects: [
+        {
+          type: "adjacentTag",
+          tag: "poison",
+          stat: "poison",
+          amount: 3,
+          label: "贴毒系 +3 毒",
+        },
+      ],
+      description: "毒炼顶级件，牺牲生命换极高持续伤害。",
+    },
+    {
+      id: "ember_saber",
+      name: "余烬弯刀",
+      symbol: "ES",
+      rarity: "rare",
+      tags: ["weapon", "fire", "metal"],
+      stats: { attack: 9, burn: 3 },
+      effects: [
+        {
+          type: "adjacentTag",
+          tag: "fire",
+          stat: "attack",
+          amount: 4,
+          label: "贴火系 +4 攻击",
+        },
+      ],
+      description: "火铸武器，既砍人也点燃战场。",
+    },
+    {
+      id: "forge_heart",
+      name: "熔炉心",
+      symbol: "FH",
+      rarity: "epic",
+      tags: ["fire", "metal", "machine"],
+      stats: { burn: 7, armor: 2 },
+      effects: [
+        {
+          type: "sameRowTag",
+          tag: "metal",
+          stat: "burn",
+          amount: 2,
+          label: "同行金属 +2 燃烧",
+        },
+      ],
+      description: "火铸终点，把整排金属都烧成战斗引擎。",
+    },
+    {
+      id: "clockwork_halberd",
+      name: "钟械戟",
+      symbol: "CH",
+      rarity: "rare",
+      tags: ["weapon", "metal", "machine"],
+      stats: { attack: 10, attackSpeed: 0.35 },
+      effects: [
+        {
+          type: "adjacentTag",
+          tag: "machine",
+          stat: "attack",
+          amount: 4,
+          label: "贴机械 +4 攻击",
+        },
+      ],
+      description: "机械武器流的主手，吃攻速也吃机械联动。",
+    },
+    {
+      id: "siege_chime",
+      name: "攻城鸣钟",
+      symbol: "SZ",
+      rarity: "epic",
+      tags: ["machine", "sound", "trinket"],
+      stats: { attackSpeed: 0.55, attack: 4 },
+      effects: [
+        {
+          type: "sameRowTag",
+          tag: "weapon",
+          stat: "attackSpeed",
+          amount: 0.18,
+          label: "同行武器 +0.18 攻速",
+        },
+      ],
+      description: "机械武器终点，越多武器排队越响。",
+    },
+    {
+      id: "guardian_root",
+      name: "守卫根",
+      symbol: "GR",
+      rarity: "rare",
+      tags: ["shield", "wood", "nature"],
+      stats: { maxHp: 28, armor: 3, thorns: 3 },
+      effects: [
+        {
+          type: "adjacentTag",
+          tag: "nature",
+          stat: "armor",
+          amount: 2,
+          label: "贴自然 +2 护甲",
+        },
+      ],
+      description: "棘盾自然流的厚墙，越扎根越难死。",
+    },
+    {
+      id: "elder_moss",
+      name: "古苔",
+      symbol: "EM",
+      rarity: "epic",
+      tags: ["nature", "trinket"],
+      stats: { maxHp: 22, regen: 2 },
+      effects: [
+        {
+          type: "emptyNeighbor",
+          stat: "regen",
+          amount: 0.25,
+          label: "空邻格 +0.25 回复",
+        },
+      ],
+      description: "自然流顶级续航，喜欢留出呼吸空间。",
+    },
+    {
+      id: "moon_eye",
+      name: "月眼",
+      symbol: "ME",
+      rarity: "uncommon",
+      tags: ["trinket", "glass"],
+      stats: { critChance: 0.06, regen: 0.2 },
+      effects: [
+        {
+          type: "corner",
+          stat: "critChance",
+          amount: 0.04,
+          label: "角落 +4% 暴击",
+        },
+      ],
+      description: "星象暴击流的低阶视野件。",
+    },
+    {
+      id: "astral_core",
+      name: "星核",
+      symbol: "AC",
+      rarity: "epic",
+      tags: ["trinket", "glass"],
+      stats: { attackSpeed: 0.4, critChance: 0.1 },
+      effects: [
+        {
+          type: "corner",
+          stat: "attackSpeed",
+          amount: 0.2,
+          label: "角落 +0.2 攻速",
+        },
+      ],
+      description: "星象流顶级件，只在角落真正醒来。",
+    },
+    {
+      id: "lich_crown",
+      name: "巫妖冠",
+      symbol: "LC",
+      rarity: "epic",
+      tags: ["curse", "trinket"],
+      stats: { attack: 18, maxHp: -18, critChance: 0.08 },
+      effects: [
+        {
+          type: "sameRowTag",
+          tag: "curse",
+          stat: "attack",
+          amount: 5,
+          label: "同行诅咒 +5 攻击",
+        },
+      ],
+      description: "诅咒流顶级件，没有低阶形态，拿到就要承担代价。",
+    },
+  ],
+  fusions: [
+    {
+      id: "blade_to_dagger",
+      ingredients: ["rusty_blade", "rusty_blade"],
+      resultItemId: "iron_dagger",
+    },
+    {
+      id: "poison_to_gland",
+      ingredients: ["poison_vial", "poison_vial"],
+      resultItemId: "venom_gland",
+    },
+    {
+      id: "gland_to_censer",
+      ingredients: ["venom_gland", "poison_vial"],
+      resultItemId: "serpent_censer",
+    },
+    {
+      id: "plague_idol",
+      ingredients: ["serpent_censer", "blood_contract"],
+      resultItemId: "plague_idol",
+    },
+    {
+      id: "ember_saber",
+      ingredients: ["rusty_blade", "spark_stone"],
+      resultItemId: "ember_saber",
+    },
+    {
+      id: "forge_heart",
+      ingredients: ["ember_saber", "oil_lamp"],
+      resultItemId: "forge_heart",
+    },
+    {
+      id: "clockwork_halberd",
+      ingredients: ["iron_dagger", "gear_spring"],
+      resultItemId: "clockwork_halberd",
+    },
+    {
+      id: "siege_chime",
+      ingredients: ["clockwork_halberd", "war_drum"],
+      resultItemId: "siege_chime",
+    },
+    {
+      id: "guardian_root",
+      ingredients: ["wooden_shield", "thorn_bark"],
+      resultItemId: "guardian_root",
+    },
+    {
+      id: "elder_moss",
+      ingredients: ["guardian_root", "jade_leaf"],
+      resultItemId: "elder_moss",
+    },
+    {
+      id: "moon_eye",
+      ingredients: ["lucky_coin", "lucky_coin"],
+      resultItemId: "moon_eye",
+    },
+    {
+      id: "astral_core",
+      ingredients: ["moon_eye", "mirror_shard"],
+      resultItemId: "astral_core",
+    },
+    {
+      id: "lich_crown",
+      ingredients: ["blood_contract", "bone_ring"],
+      resultItemId: "lich_crown",
     },
   ],
   enemies: [

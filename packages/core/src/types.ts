@@ -71,6 +71,12 @@ export interface ItemDef {
   description: string;
 }
 
+export interface FusionRecipe {
+  id: string;
+  ingredients: string[];
+  resultItemId: string;
+}
+
 export interface EnemyDef {
   id: string;
   name: string;
@@ -96,6 +102,7 @@ export interface WaveDef {
 
 export interface GameContent {
   items: ItemDef[];
+  fusions: FusionRecipe[];
   enemies: EnemyDef[];
   waves: WaveDef[];
 }

@@ -58,6 +58,23 @@ describe("backpack core", () => {
     assert.ok(state.totals.kills > 0);
   });
 
+  it("auto-fuses matching item recipes around the newly added item", () => {
+    const state = createGame("fusion-smoke");
+    dispatchCommand(state, { type: "debugAddItem", itemId: "rusty_blade" });
+    let snapshot = querySnapshot(state);
+
+    assert.equal(snapshot.items.filter((item) => item.def.id === "rusty_blade").length, 0);
+    assert.equal(snapshot.items.filter((item) => item.def.id === "iron_dagger").length, 1);
+
+    dispatchCommand(state, { type: "debugAddItem", itemId: "poison_vial" });
+    dispatchCommand(state, { type: "debugAddItem", itemId: "poison_vial" });
+    snapshot = querySnapshot(state);
+
+    assert.equal(snapshot.items.filter((item) => item.def.id === "venom_gland").length, 0);
+    assert.equal(snapshot.items.filter((item) => item.def.id === "serpent_censer").length, 1);
+    assert.ok(snapshot.log.some((line) => line.includes("合成")));
+  });
+
   it("defines a three-act campaign with boss checkpoints every five waves", () => {
     assert.equal(defaultContent.waves.length, 15);
     assert.deepEqual(

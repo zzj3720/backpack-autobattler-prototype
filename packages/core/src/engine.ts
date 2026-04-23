@@ -109,8 +109,9 @@ export function dispatchCommand(
         return state;
       }
       state.rewards = [];
-      syncPlayerStats(state, content, true);
       pushLog(state, `拿到 ${getItemDef(content, command.itemId).name}。`);
+      applyFusions(state, content, placed.id);
+      syncPlayerStats(state, content, true);
       return state;
     }
 
@@ -141,8 +142,9 @@ export function dispatchCommand(
     case "debugAddItem": {
       const placed = addItemFirstOpen(state, command.itemId, content);
       if (placed) {
-        syncPlayerStats(state, content, true);
         pushLog(state, `营地补给：加入 ${getItemDef(content, command.itemId).name}。`);
+        applyFusions(state, content, placed.id);
+        syncPlayerStats(state, content, true);
       }
       return state;
     }
@@ -345,16 +347,19 @@ function getEnemyDef(content: GameContent, enemyId: string): EnemyDef {
   return enemy;
 }
 
-function addItemFirstOpen(state: GameState, itemId: string, content: GameContent): boolean {
+function addItemFirstOpen(
+  state: GameState,
+  itemId: string,
+  content: GameContent,
+): ItemInstance | null {
   for (let y = 0; y < GRID_HEIGHT; y += 1) {
     for (let x = 0; x < GRID_WIDTH; x += 1) {
       if (cellAt(state, x, y) === null) {
-        addItemAt(state, itemId, x, y, content);
-        return true;
+        return addItemAt(state, itemId, x, y, content);
       }
     }
   }
-  return false;
+  return null;
 }
 
 function addItemAt(
@@ -405,6 +410,59 @@ function moveItem(
   instance.x = x;
   instance.y = y;
   setCell(state, x, y, instanceId);
+}
+
+function applyFusions(state: GameState, content: GameContent, focusInstanceId: string): void {
+  let focus = focusInstanceId;
+  while (state.items[focus]) {
+    const match = findFusionMatch(state, content, focus);
+    if (!match) {
+      return;
+    }
+
+    const anchor = state.items[focus]!;
+    const x = anchor.x;
+    const y = anchor.y;
+    const ingredientNames = match.instances.map(
+      (instance) => getItemDef(content, instance.defId).name,
+    );
+    for (const instance of match.instances) {
+      setCell(state, instance.x, instance.y, null);
+      delete state.items[instance.id];
+    }
+
+    const result = addItemAt(state, match.recipe.resultItemId, x, y, content);
+    const resultName = getItemDef(content, result.defId).name;
+    pushLog(state, `合成 ${ingredientNames.join(" + ")} -> ${resultName}。`);
+    focus = result.id;
+  }
+}
+
+function findFusionMatch(
+  state: GameState,
+  content: GameContent,
+  focusInstanceId: string,
+): { recipe: GameContent["fusions"][number]; instances: ItemInstance[] } | null {
+  const items = Object.values(state.items);
+  for (const recipe of content.fusions) {
+    const used = new Set<string>();
+    const instances: ItemInstance[] = [];
+    for (const ingredientId of recipe.ingredients) {
+      const instance = items.find(
+        (candidate) => candidate.defId === ingredientId && !used.has(candidate.id),
+      );
+      if (!instance) {
+        instances.length = 0;
+        break;
+      }
+      used.add(instance.id);
+      instances.push(instance);
+    }
+    if (instances.some((instance) => instance.id === focusInstanceId)) {
+      return { recipe, instances };
+    }
+  }
+  return null;
 }
 
 function spawnWave(state: GameState, content: GameContent): void {
