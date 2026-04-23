@@ -112,6 +112,24 @@ const uiSprites = {
   frameRare: `${uiBase}/frame-rare.png`,
   battleLedger: `${uiBase}/battle-ledger.png`,
 };
+const rewardCardSprites: Record<Rarity, { normal: string; hover: string }> = {
+  common: {
+    normal: `${uiBase}/reward-card-common.png`,
+    hover: `${uiBase}/reward-card-common-hover.png`,
+  },
+  uncommon: {
+    normal: `${uiBase}/reward-card-uncommon.png`,
+    hover: `${uiBase}/reward-card-uncommon-hover.png`,
+  },
+  rare: {
+    normal: `${uiBase}/reward-card-rare.png`,
+    hover: `${uiBase}/reward-card-rare-hover.png`,
+  },
+  epic: {
+    normal: `${uiBase}/reward-card-epic.png`,
+    hover: `${uiBase}/reward-card-epic-hover.png`,
+  },
+};
 const spriteCache = new Map<string, HTMLImageElement>();
 
 interface HitZone {
@@ -570,12 +588,8 @@ function rewardCard(x: number, y: number, item: ItemDef): void {
     pointer.x <= x + REWARD_CARD_W &&
     pointer.y >= y &&
     pointer.y <= y + REWARD_CARD_H;
-  drawSprite(uiSprites.rewardCard, x, y, REWARD_CARD_W, REWARD_CARD_H, 0);
-  if (hovered) {
-    ctx.strokeStyle = "#f3d18a";
-    ctx.lineWidth = 2;
-    roundRect(x + 5, y + 5, REWARD_CARD_W - 10, REWARD_CARD_H - 10, 7, false);
-  }
+  const cardSprite = rewardCardSprites[item.rarity];
+  drawSprite(hovered ? cardSprite.hover : cardSprite.normal, x, y, REWARD_CARD_W, REWARD_CARD_H, 0);
   drawSprite(itemSprites[item.id], x + 17, y + 12, 48, 48, 5);
   text(item.name, x + 86, y + 11, 15, "#f5f0dc");
   text(`${rarityLabel[item.rarity]} | ${rewardStatSummary(item)}`, x + 86, y + 31, 12, "#9cb4bd");
@@ -953,6 +967,7 @@ function preloadSprites(): void {
     ...Object.values(itemSprites),
     ...Object.values(actorSprites),
     ...Object.values(uiSprites),
+    ...Object.values(rewardCardSprites).flatMap((sprites) => [sprites.normal, sprites.hover]),
   ]) {
     const image = new Image();
     image.onload = () => render();
