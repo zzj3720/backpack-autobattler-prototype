@@ -35,3 +35,5 @@ Use GitHub Issues for playtest feedback. Good reports include:
 - what happened
 - what you expected
 - screenshot or short clip if useful
+
+Every issue should receive a response. Accepted issues are implemented through a normal GitHub pull request linked with `Closes #issue`; rejected or deferred issues should still receive a short rationale.
