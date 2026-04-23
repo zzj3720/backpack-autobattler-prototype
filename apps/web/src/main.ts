@@ -17,19 +17,12 @@ import "./style.css";
 
 const WIDTH = 1280;
 const HEIGHT = 760;
-const CELL = 82;
-const BAG_W = 600;
-const BAG_H = 420;
+const CELL = 58;
+const BAG_W = 520;
+const BAG_H = 520;
 const BAG_X = (WIDTH - BAG_W) / 2;
-const BAG_OPEN_Y = 304;
-const BAG_CLOSED_Y = 692;
-
-const rarityColor: Record<Rarity, string> = {
-  common: "#8b949e",
-  uncommon: "#3fb950",
-  rare: "#58a6ff",
-  epic: "#d2a8ff",
-};
+const BAG_OPEN_Y = 226;
+const BAG_CLOSED_Y = 690;
 
 const rarityLabel: Record<Rarity, string> = {
   common: "普通",
@@ -78,6 +71,21 @@ const actorSprites: Record<string, string> = {
   boss: `${spriteBase}/actors/boss.png`,
 };
 const backgroundSprite = "/assets/backgrounds/dungeon-workbench.png";
+const uiBase = "/assets/ui";
+const uiSprites = {
+  bagOpen: `${uiBase}/bag-open.png`,
+  bagClosed: `${uiBase}/bag-closed.png`,
+  rewardCard: `${uiBase}/reward-card.png`,
+  tooltipParchment: `${uiBase}/tooltip-parchment.png`,
+  buttonNormal: `${uiBase}/button-normal.png`,
+  buttonPressed: `${uiBase}/button-pressed.png`,
+  buttonDisabled: `${uiBase}/button-disabled.png`,
+  smallSeal: `${uiBase}/small-seal.png`,
+  inventorySlot: `${uiBase}/inventory-slot.png`,
+  frameCommon: `${uiBase}/frame-common.png`,
+  frameRare: `${uiBase}/frame-rare.png`,
+  battleLedger: `${uiBase}/battle-ledger.png`,
+};
 const spriteCache = new Map<string, HTMLImageElement>();
 
 interface HitZone {
@@ -326,26 +334,28 @@ function drawBackpack(hoveredItem: ItemSnapshot | null): void {
   }
 
   for (const item of snapshot.items) {
-    const px = origin.x + item.instance.x * CELL + 7;
-    const py = origin.y + item.instance.y * CELL + 7;
-    const itemGlow = ctx.createRadialGradient(px + 30, py + 30, 8, px + 30, py + 30, 42);
-    itemGlow.addColorStop(0, "rgba(244, 204, 125, 0.14)");
-    itemGlow.addColorStop(1, "rgba(12, 18, 18, 0.92)");
-    ctx.fillStyle = itemGlow;
-    roundRect(px, py, CELL - 22, CELL - 22, 6, true);
-    ctx.strokeStyle = rarityColor[item.def.rarity];
-    ctx.lineWidth = hoveredItem?.instance.id === item.instance.id ? 5 : 3;
-    roundRect(px, py, CELL - 22, CELL - 22, 6, false);
-    if (!drawSprite(itemSprites[item.def.id], px + 5, py + 5, CELL - 32, CELL - 32, 6)) {
-      text(item.def.symbol, px + 30, py + 18, 24, "#fff7d6", "center", "monospace");
+    const px = origin.x + item.instance.x * CELL + 2;
+    const py = origin.y + item.instance.y * CELL + 2;
+    const frameSprite =
+      item.def.rarity === "rare" || item.def.rarity === "epic"
+        ? uiSprites.frameRare
+        : uiSprites.frameCommon;
+    drawSprite(frameSprite, px - 2, py - 2, CELL - 4, CELL - 4, 0);
+    if (hoveredItem?.instance.id === item.instance.id) {
+      ctx.strokeStyle = "#f3d18a";
+      ctx.lineWidth = 3;
+      roundRect(px - 1, py - 1, CELL - 6, CELL - 6, 5, false);
+    }
+    if (!drawSprite(itemSprites[item.def.id], px + 7, py + 7, CELL - 20, CELL - 20, 5)) {
+      text(item.def.symbol, px + 27, py + 16, 18, "#fff7d6", "center", "monospace");
     }
     ctx.fillStyle = "rgba(16, 10, 7, 0.78)";
-    roundRect(px + 5, py + 43, CELL - 32, 14, 4, true);
-    text(item.def.name.slice(0, 4), px + 30, py + 44, 11, "#ffe6aa", "center");
+    roundRect(px + 4, py + CELL - 21, CELL - 16, 12, 4, true);
+    text(item.def.name.slice(0, 3), px + CELL / 2 - 2, py + CELL - 21, 10, "#ffe6aa", "center");
   }
 
   const stats = snapshot.player.stats;
-  drawStatLedger(BAG_X + 34, bagY + 88, 126, 190, formatStats(stats));
+  drawStatLedger(72, 506, 178, 158, formatStats(stats));
 }
 
 function drawItemLinkHighlights(item: ItemSnapshot): void {
@@ -401,7 +411,9 @@ function drawArena(): void {
   drawPlayer(210, 360);
   drawEnemies();
   drawBattleBanner();
-  text(phaseLabel(), WIDTH / 2, 78, 16, "#d6c5a1", "center");
+  if (snapshot.phase !== "draft") {
+    text(phaseLabel(), WIDTH / 2, 78, 16, "#d6c5a1", "center");
+  }
 }
 
 function drawBattleBanner(): void {
@@ -411,11 +423,7 @@ function drawBattleBanner(): void {
   const alpha = Math.max(0, Math.min(1, (battleBannerUntilMs - performance.now()) / 850));
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.fillStyle = "rgba(90, 46, 22, 0.78)";
-  roundRect(WIDTH / 2 - 78, 102, 156, 40, 8, true);
-  ctx.strokeStyle = "#f3d18a";
-  ctx.lineWidth = 2;
-  roundRect(WIDTH / 2 - 78, 102, 156, 40, 8, false);
+  drawNinePatch(uiSprites.smallSeal, WIDTH / 2 - 78, 102, 156, 40, 28);
   text("战鼓已响", WIDTH / 2, 112, 18, "#f3d18a", "center");
   ctx.restore();
 }
@@ -461,7 +469,7 @@ function drawEnemies(): void {
 
 function drawSidePanel(): void {
   if (snapshot.phase === "draft") {
-    const y = backpackVisualY + 338;
+    const y = backpackVisualY + BAG_H - 74;
     button(BAG_X + BAG_W - 206, y, 170, 42, "敲响战鼓", () => {
       const phaseBefore = state.phase;
       state = dispatchCommand(state, { type: "startBattle" });
@@ -515,15 +523,12 @@ function drawBattleLedger(): void {
 
 function rewardCard(x: number, y: number, item: ItemDef): void {
   const hovered = pointer.x >= x && pointer.x <= x + 252 && pointer.y >= y && pointer.y <= y + 76;
-  const card = ctx.createLinearGradient(x, y, x + 252, y + 76);
-  card.addColorStop(0, hovered ? "rgba(61, 43, 25, 0.94)" : "rgba(38, 28, 20, 0.9)");
-  card.addColorStop(1, hovered ? "rgba(16, 34, 34, 0.94)" : "rgba(13, 25, 26, 0.9)");
-  ctx.fillStyle = card;
-  roundRect(x, y, 252, 76, 7, true);
-  ctx.strokeStyle = hovered ? "#f3d18a" : rarityColor[item.rarity];
-  ctx.lineWidth = hovered ? 3 : 2;
-  roundRect(x, y, 252, 76, 7, false);
-  drawCornerBrackets(x + 5, y + 5, 242, 66, "rgba(222, 164, 79, 0.34)");
+  drawNinePatch(uiSprites.rewardCard, x, y, 252, 76, 34);
+  if (hovered) {
+    ctx.strokeStyle = "#f3d18a";
+    ctx.lineWidth = 2;
+    roundRect(x + 4, y + 4, 244, 68, 7, false);
+  }
   ctx.fillStyle = "rgba(7, 10, 10, 0.72)";
   roundRect(x + 10, y + 10, 56, 56, 6, true);
   drawSprite(itemSprites[item.id], x + 12, y + 12, 52, 52, 5);
@@ -556,17 +561,8 @@ function rewardEffectSummary(item: ItemDef): string {
 function drawResultCard(): void {
   const x = 470;
   const y = 626;
-  const scroll = ctx.createLinearGradient(x, y, x + 448, y + 70);
-  scroll.addColorStop(0, "rgba(72, 46, 25, 0.94)");
-  scroll.addColorStop(0.52, "rgba(29, 33, 29, 0.94)");
-  scroll.addColorStop(1, "rgba(24, 14, 12, 0.94)");
-  ctx.fillStyle = scroll;
-  roundRect(x, y, 448, 70, 8, true);
-  ctx.strokeStyle = snapshot.phase === "victory" ? "#f3d18a" : "#cf4e4e";
-  ctx.lineWidth = 2;
-  roundRect(x, y, 448, 70, 8, false);
-  drawCornerBrackets(x + 8, y + 8, 432, 54, "rgba(222, 164, 79, 0.42)");
-  text(snapshot.phase === "victory" ? "胜利结算" : "失败结算", x + 18, y + 14, 18, "#f5f0dc");
+  drawNinePatch(uiSprites.battleLedger, x, y, 448, 70, 34);
+  text(snapshot.phase === "victory" ? "胜利结算" : "失败结算", x + 18, y + 14, 18, "#3b2413");
   wrapText(
     `${snapshot.endReason ?? ""} | 击杀 ${snapshot.totals.kills} | 伤害 ${Math.round(snapshot.totals.damageDone)} | 纹章 ${snapshot.shareCode}`,
     x + 18,
@@ -574,7 +570,7 @@ function drawResultCard(): void {
     410,
     18,
     14,
-    "#b8cbd3",
+    "#4b3827",
   );
 }
 
@@ -588,27 +584,18 @@ function drawItemTooltip(item: ItemSnapshot): void {
   const x = Math.min(WIDTH - w - 24, Math.max(40, pointer.x + 24));
   const y = Math.min(HEIGHT - 24 - h, Math.max(72, pointer.y + 18));
 
-  const panel = ctx.createLinearGradient(x, y, x + w, y + h);
-  panel.addColorStop(0, "rgba(50, 34, 20, 0.96)");
-  panel.addColorStop(0.38, "rgba(16, 24, 22, 0.96)");
-  panel.addColorStop(1, "rgba(9, 12, 13, 0.98)");
-  ctx.fillStyle = panel;
-  roundRect(x, y, w, h, 8, true);
-  ctx.strokeStyle = rarityColor[item.def.rarity];
-  ctx.lineWidth = 2;
-  roundRect(x, y, w, h, 8, false);
-  drawCornerBrackets(x + 8, y + 8, w - 16, h - 16, "rgba(222, 164, 79, 0.36)");
+  drawNinePatch(uiSprites.tooltipParchment, x, y, w, h, 44);
 
   ctx.fillStyle = "rgba(7, 10, 10, 0.74)";
   roundRect(x + 14, y + 14, 54, 54, 6, true);
   drawSprite(itemSprites[item.def.id], x + 17, y + 17, 48, 48, 5);
-  text(item.def.name, x + 78, y + 14, 17, "#f5f0dc");
+  text(item.def.name, x + 78, y + 14, 17, "#3b2413");
   text(
     `${rarityLabel[item.def.rarity]} | ${item.def.tags.join(" / ")}`,
     x + 78,
     y + 39,
     12,
-    "#8fb6c8",
+    "#5e4024",
   );
   const descriptionHeight = wrapText(
     item.def.description,
@@ -617,13 +604,13 @@ function drawItemTooltip(item: ItemSnapshot): void {
     w - 28,
     17,
     12,
-    "#b8cbd3",
+    "#3f3020",
   );
 
   let cursorY = y + 78 + descriptionHeight + 12;
   for (const lineText of lines) {
     const active = lineText.startsWith("已触发");
-    cursorY += wrapText(lineText, x + 14, cursorY, w - 28, 19, 12, active ? "#f3d18a" : "#8da2aa");
+    cursorY += wrapText(lineText, x + 14, cursorY, w - 28, 19, 12, active ? "#7a2e14" : "#614832");
   }
 }
 
@@ -710,11 +697,11 @@ function drawGhost(): void {
     return;
   }
   ctx.globalAlpha = 0.78;
-  ctx.fillStyle = "rgba(29, 42, 49, 0.92)";
-  roundRect(pointer.x - 30, pointer.y - 30, CELL - 22, CELL - 22, 6, true);
-  ctx.strokeStyle = rarityColor[item.def.rarity];
-  ctx.lineWidth = 3;
-  roundRect(pointer.x - 30, pointer.y - 30, CELL - 22, CELL - 22, 6, false);
+  const frameSprite =
+    item.def.rarity === "rare" || item.def.rarity === "epic"
+      ? uiSprites.frameRare
+      : uiSprites.frameCommon;
+  drawSprite(frameSprite, pointer.x - 30, pointer.y - 30, CELL - 4, CELL - 4, 0);
   if (
     !drawSprite(itemSprites[item.def.id], pointer.x - 25, pointer.y - 25, CELL - 32, CELL - 32, 6)
   ) {
@@ -734,22 +721,18 @@ function button(
 ): void {
   const hovered =
     enabled && pointer.x >= x && pointer.x <= x + w && pointer.y >= y && pointer.y <= y + h;
-  const face = ctx.createLinearGradient(x, y, x, y + h);
-  if (enabled) {
-    face.addColorStop(0, hovered ? "#6b4725" : "#4e321d");
-    face.addColorStop(0.52, hovered ? "#2e4a46" : "#233b38");
-    face.addColorStop(1, hovered ? "#8a5a2b" : "#5d3a1f");
-  } else {
-    face.addColorStop(0, "#242727");
-    face.addColorStop(1, "#151a1b");
-  }
-  ctx.fillStyle = face;
-  roundRect(x, y, w, h, 6, true);
-  ctx.strokeStyle = enabled ? (hovered ? "#f3d18a" : "#9a7140") : "#34454c";
-  ctx.lineWidth = hovered ? 2 : 1;
-  roundRect(x, y, w, h, 6, false);
-  ctx.strokeStyle = "rgba(255, 238, 186, 0.16)";
-  line(x + 8, y + 6, x + w - 8, y + 6);
+  drawNinePatch(
+    enabled
+      ? hovered
+        ? uiSprites.buttonPressed
+        : uiSprites.buttonNormal
+      : uiSprites.buttonDisabled,
+    x,
+    y,
+    w,
+    h,
+    46,
+  );
   text(label, x + w / 2, y + h / 2 - 7, 14, enabled ? "#ffe6aa" : "#7d9199", "center");
   if (enabled) {
     hitZones.push({ x, y, w, h, onClick });
@@ -834,6 +817,7 @@ function preloadSprites(): void {
     backgroundSprite,
     ...Object.values(itemSprites),
     ...Object.values(actorSprites),
+    ...Object.values(uiSprites),
   ]) {
     const image = new Image();
     image.onload = () => render();
@@ -862,6 +846,51 @@ function drawSprite(
   clippedRoundRect(x, y, w, h, radius);
   ctx.drawImage(image, x, y, w, h);
   ctx.restore();
+  return true;
+}
+
+function drawNinePatch(
+  path: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  inset: number,
+): boolean {
+  const image = spriteCache.get(path);
+  if (!image?.complete || image.naturalWidth === 0) {
+    return false;
+  }
+  const iw = image.naturalWidth;
+  const ih = image.naturalHeight;
+  const s = Math.min(inset, Math.floor(iw / 2) - 1, Math.floor(ih / 2) - 1);
+  const dx = [x, x + s, x + w - s];
+  const dy = [y, y + s, y + h - s];
+  const dw = [s, Math.max(0, w - s * 2), s];
+  const dh = [s, Math.max(0, h - s * 2), s];
+  const sx = [0, s, iw - s];
+  const sy = [0, s, ih - s];
+  const sw = [s, Math.max(0, iw - s * 2), s];
+  const sh = [s, Math.max(0, ih - s * 2), s];
+
+  for (let row = 0; row < 3; row += 1) {
+    for (let column = 0; column < 3; column += 1) {
+      if (dw[column]! <= 0 || dh[row]! <= 0 || sw[column]! <= 0 || sh[row]! <= 0) {
+        continue;
+      }
+      ctx.drawImage(
+        image,
+        sx[column]!,
+        sy[row]!,
+        sw[column]!,
+        sh[row]!,
+        dx[column]!,
+        dy[row]!,
+        dw[column]!,
+        dh[row]!,
+      );
+    }
+  }
   return true;
 }
 
@@ -967,8 +996,8 @@ function phaseLabel(): string {
 
 function gridOrigin(): Point {
   return {
-    x: BAG_X + (BAG_W - (GRID_WIDTH * CELL - 8)) / 2 + 36,
-    y: backpackVisualY + 78,
+    x: BAG_X + 117,
+    y: backpackVisualY + 138,
   };
 }
 
@@ -1006,91 +1035,28 @@ function drawBackpackBody(x: number, y: number, w: number, h: number, open: bool
   ctx.shadowColor = "rgba(0, 0, 0, 0.48)";
   ctx.shadowBlur = 20;
   ctx.shadowOffsetY = 8;
-  const leather = ctx.createLinearGradient(x, y, x, y + h);
-  leather.addColorStop(0, open ? "#5a351d" : "#4a2c19");
-  leather.addColorStop(0.52, "#2f2118");
-  leather.addColorStop(1, "#16120f");
-  ctx.fillStyle = leather;
-  roundRect(x, y, w, h, 18, true);
+  if (open) {
+    drawSprite(uiSprites.bagOpen, x, y, w, h, 0);
+  } else {
+    drawSprite(uiSprites.bagClosed, x + 72, y, w - 144, 112, 0);
+  }
   ctx.restore();
-
-  ctx.strokeStyle = "rgba(222, 164, 79, 0.7)";
-  ctx.lineWidth = 3;
-  roundRect(x, y, w, h, 18, false);
-
-  ctx.fillStyle = "rgba(28, 18, 13, 0.56)";
-  roundRect(x + 22, y + 22, w - 44, 58, 14, true);
-  ctx.strokeStyle = "rgba(245, 205, 125, 0.28)";
-  ctx.lineWidth = 1;
-  roundRect(x + 22, y + 22, w - 44, 58, 14, false);
-
-  ctx.fillStyle = "rgba(103, 66, 34, 0.9)";
-  roundRect(x + w / 2 - 42, y + 36, 84, 28, 8, true);
-  ctx.strokeStyle = "rgba(243, 209, 138, 0.74)";
-  ctx.lineWidth = 2;
-  roundRect(x + w / 2 - 42, y + 36, 84, 28, 8, false);
-  text(open ? "行囊" : "行囊", x + w / 2, y + 43, 15, "#f3d18a", "center");
-
-  ctx.strokeStyle = "rgba(17, 11, 8, 0.42)";
-  ctx.lineWidth = 8;
-  line(x + 58, y + 82, x + 58, y + h - 30);
-  line(x + w - 58, y + 82, x + w - 58, y + h - 30);
 }
 
 function drawSmallSeal(x: number, y: number, w: number, label: string): void {
   const h = 28;
-  const seal = ctx.createLinearGradient(x, y, x + w, y + h);
-  seal.addColorStop(0, "rgba(37, 25, 15, 0.9)");
-  seal.addColorStop(1, "rgba(15, 29, 30, 0.88)");
-  ctx.fillStyle = seal;
-  roundRect(x, y, w, h, 6, true);
-  ctx.strokeStyle = "rgba(184, 138, 69, 0.7)";
-  ctx.lineWidth = 1;
-  roundRect(x, y, w, h, 6, false);
+  drawNinePatch(uiSprites.smallSeal, x, y, w, h, 24);
   text(label, x + w / 2, y + 7, 13, "#d7c394", "center");
 }
 
 function drawInventorySlot(x: number, y: number, w: number, h: number): void {
-  const slot = ctx.createLinearGradient(x, y, x + w, y + h);
-  slot.addColorStop(0, "rgba(35, 43, 39, 0.86)");
-  slot.addColorStop(0.5, "rgba(14, 24, 26, 0.9)");
-  slot.addColorStop(1, "rgba(35, 25, 18, 0.82)");
-  ctx.fillStyle = slot;
-  roundRect(x, y, w, h, 6, true);
-  ctx.strokeStyle = "rgba(115, 91, 56, 0.62)";
-  ctx.lineWidth = 2;
-  roundRect(x, y, w, h, 6, false);
-  ctx.strokeStyle = "rgba(190, 158, 95, 0.08)";
-  ctx.lineWidth = 1;
-  line(x + 10, y + 10, x + w - 10, y + h - 10);
-  line(x + w - 10, y + 10, x + 10, y + h - 10);
+  drawSprite(uiSprites.inventorySlot, x, y, w, h, 0);
 }
 
 function drawStatLedger(x: number, y: number, w: number, h: number, value: string): void {
-  const ledger = ctx.createLinearGradient(x, y, x + w, y + h);
-  ledger.addColorStop(0, "rgba(50, 35, 20, 0.74)");
-  ledger.addColorStop(1, "rgba(12, 24, 24, 0.82)");
-  ctx.fillStyle = ledger;
-  roundRect(x, y, w, h, 7, true);
-  ctx.strokeStyle = "rgba(184, 138, 69, 0.48)";
-  ctx.lineWidth = 1;
-  roundRect(x, y, w, h, 7, false);
-  text("英雄刻度", x + 14, y + 10, 14, "#f3d18a");
-  wrapText(value, x + 14, y + 32, w - 28, 18, 14, "#d6c5a1");
-}
-
-function drawCornerBrackets(x: number, y: number, w: number, h: number, color: string): void {
-  const size = 18;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  line(x, y + size, x, y);
-  line(x, y, x + size, y);
-  line(x + w - size, y, x + w, y);
-  line(x + w, y, x + w, y + size);
-  line(x, y + h - size, x, y + h);
-  line(x, y + h, x + size, y + h);
-  line(x + w - size, y + h, x + w, y + h);
-  line(x + w, y + h, x + w, y + h - size);
+  drawNinePatch(uiSprites.battleLedger, x, y, w, h, 34);
+  text("英雄刻度", x + 14, y + 12, 14, "#3b2413");
+  wrapText(value, x + 14, y + 36, w - 28, 18, 14, "#4b3827");
 }
 
 function roundRect(x: number, y: number, w: number, h: number, r: number, fill: boolean): void {

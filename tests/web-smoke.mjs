@@ -17,7 +17,7 @@ page.on("console", (message) => {
 await page.goto(process.env.WEB_SMOKE_URL ?? "http://127.0.0.1:5173", { waitUntil: "networkidle" });
 await page.waitForSelector("#game");
 await page.mouse.click(372, 220);
-await page.mouse.click(819, 663);
+await page.mouse.click(790, 692);
 await page.waitForTimeout(700);
 
 const metrics = await page.evaluate(() => {
