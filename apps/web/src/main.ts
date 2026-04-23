@@ -380,7 +380,7 @@ function drawBackpack(hoveredItem: ItemSnapshot | null): void {
     text(item.def.name.slice(0, 3), px + CELL / 2 - 2, py + CELL - 21, 10, "#ffe6aa", "center");
   }
 
-  drawPlayerStatusPanel(42, 478, 306, 198);
+  drawPlayerStatusPanel(42, 456, 330, 226);
 }
 
 function drawItemLinkHighlights(item: ItemSnapshot): void {
@@ -606,55 +606,64 @@ function drawResultCard(): void {
 function drawItemTooltip(item: ItemSnapshot): void {
   const statEntries = statPairs(item.stats).slice(0, 6);
   const effectRows = tooltipEffectRows(item);
-  const w = 410;
-  const innerX = 24;
+  const w = 430;
+  const innerX = 54;
   const innerW = w - innerX * 2;
   const descHeight = measureWrappedTextHeight(item.def.description, innerW, 18, 13);
   const statRows = Math.ceil(statEntries.length / 2);
   const effectHeight = Math.max(28, effectRows.length * 30);
-  const h = 98 + descHeight + 12 + 22 + Math.max(1, statRows) * 30 + 12 + 20 + effectHeight + 42;
+  const h = 116 + descHeight + 14 + 23 + Math.max(1, statRows) * 30 + 16 + 22 + effectHeight + 54;
   const preferredX = pointer.x + 34;
   const x = preferredX + w <= WIDTH - 24 ? preferredX : pointer.x - w - 34;
   const y = Math.min(HEIGHT - 24 - h, Math.max(78, pointer.y - 86));
 
   drawNinePatch(uiSprites.tooltipParchment, x, y, w, h, 44);
 
-  ctx.fillStyle = "rgba(247, 220, 158, 0.52)";
-  roundRect(x + 20, y + 18, w - 40, h - 38, 8, true);
-
-  ctx.fillStyle = "rgba(15, 10, 7, 0.72)";
-  roundRect(x + 24, y + 22, 62, 62, 7, true);
-  drawSprite(itemSprites[item.def.id], x + 29, y + 27, 52, 52, 5);
-  text(item.def.name, x + 100, y + 22, 20, "#2b160b", "left", '"Songti SC", Georgia, serif');
+  drawSprite(uiSprites.frameCommon, x + innerX, y + 44, 62, 62, 0);
+  drawSprite(itemSprites[item.def.id], x + innerX + 5, y + 49, 52, 52, 5);
+  text(
+    item.def.name,
+    x + innerX + 78,
+    y + 48,
+    20,
+    "#241006",
+    "left",
+    '"Songti SC", Georgia, serif',
+    "#f2d99b",
+  );
   text(
     `${rarityLabel[item.def.rarity]} | ${item.def.tags.map(formatTag).join(" / ")}`,
-    x + 100,
-    y + 52,
+    x + innerX + 78,
+    y + 78,
     13,
-    "#68411e",
+    "#4f2a12",
+    "left",
+    undefined,
+    "#f2d99b",
   );
   const descriptionHeight = wrapText(
     item.def.description,
     x + innerX,
-    y + 98,
+    y + 116,
     innerW,
     18,
     13,
-    "#321d11",
+    "#241006",
+    "#f2d99b",
   );
 
-  let cursorY = y + 104 + descriptionHeight;
+  let cursorY = y + 116 + descriptionHeight + 14;
   drawDivider(x + innerX, cursorY, innerW);
   cursorY += 12;
-  text("当前贡献", x + innerX, cursorY, 13, "#6a3515");
-  cursorY += 22;
+  text("当前贡献", x + innerX, cursorY, 14, "#3a1a0a", "left", undefined, "#f2d99b");
+  cursorY += 23;
   for (let index = 0; index < statEntries.length; index += 1) {
     const column = index % 2;
     const row = Math.floor(index / 2);
     drawStatChip(
-      x + innerX + column * 174,
+      x + innerX + column * 162,
       cursorY + row * 30,
-      160,
+      144,
       statEntries[index]!.label,
       statEntries[index]!.value,
     );
@@ -662,10 +671,10 @@ function drawItemTooltip(item: ItemSnapshot): void {
   cursorY += Math.max(1, statRows) * 30 + 4;
   drawDivider(x + innerX, cursorY, innerW);
   cursorY += 12;
-  text("连携状态", x + innerX, cursorY, 13, "#6a3515");
-  cursorY += 20;
+  text("连携状态", x + innerX, cursorY, 14, "#3a1a0a", "left", undefined, "#f2d99b");
+  cursorY += 22;
   if (effectRows.length === 0) {
-    text("无连携效果", x + innerX, cursorY, 13, "#5f4631");
+    text("无连携效果", x + innerX, cursorY, 13, "#4f2a12", "left", undefined, "#f2d99b");
     return;
   }
   for (const row of effectRows) {
@@ -988,11 +997,18 @@ function text(
   color: string,
   align: CanvasTextAlign = "left",
   family = "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+  outlineColor?: string,
 ): void {
-  ctx.fillStyle = color;
   ctx.font = `${size}px ${family}`;
   ctx.textAlign = align;
   ctx.textBaseline = "top";
+  if (outlineColor) {
+    ctx.lineJoin = "round";
+    ctx.lineWidth = Math.max(2, Math.round(size * 0.18));
+    ctx.strokeStyle = outlineColor;
+    ctx.strokeText(value, x, y);
+  }
+  ctx.fillStyle = color;
   ctx.fillText(value, x, y);
 }
 
@@ -1004,11 +1020,12 @@ function wrapText(
   lineHeight: number,
   size: number,
   color: string,
+  outlineColor?: string,
 ): number {
   const lines = wrapLines(value, maxWidth, size);
   let cursorY = y;
   for (const lineText of lines) {
-    text(lineText, x, cursorY, size, color);
+    text(lineText, x, cursorY, size, color, "left", undefined, outlineColor);
     cursorY += lineHeight;
   }
   return Math.max(lineHeight, cursorY - y);
@@ -1121,20 +1138,30 @@ function drawCellEmptyState(x: number, y: number): void {
 function drawPlayerStatusPanel(x: number, y: number, w: number, h: number): void {
   const stats = snapshot.player.stats;
   drawNinePatch(uiSprites.tooltipParchment, x, y, w, h, 44);
-  const inset = 28;
-  ctx.fillStyle = "rgba(247, 220, 158, 0.52)";
-  roundRect(x + inset, y + 22, w - inset * 2, h - 48, 8, true);
+  const inset = 54;
 
-  text("英雄状态", x + inset + 2, y + 27, 18, "#2b160b", "left", '"Songti SC", Georgia, serif');
+  text(
+    "英雄状态",
+    x + inset,
+    y + 50,
+    18,
+    "#241006",
+    "left",
+    '"Songti SC", Georgia, serif',
+    "#f2d99b",
+  );
   text(
     `${Math.ceil(snapshot.player.hp)}/${Math.ceil(stats.maxHp)}`,
-    x + w - inset - 2,
-    y + 29,
+    x + w - inset,
+    y + 52,
     14,
-    "#59320f",
+    "#241006",
     "right",
+    undefined,
+    "#f2d99b",
   );
-  drawBar(x + inset + 2, y + 58, w - inset * 2 - 4, 8, snapshot.player.hp / stats.maxHp, "#63d990");
+  drawBar(x + inset, y + 82, w - inset * 2, 8, snapshot.player.hp / stats.maxHp, "#63d990");
+  drawDivider(x + inset, y + 100, w - inset * 2);
 
   const rows = [
     ["攻击", fmt(stats.attack), "攻速", fmt(stats.attackSpeed)],
@@ -1143,26 +1170,22 @@ function drawPlayerStatusPanel(x: number, y: number, w: number, h: number): void
     ["反伤", fmt(stats.thorns), "暴击", `${Math.round(stats.critChance * 100)}%`],
   ] as const;
 
-  let cursorY = y + 78;
+  let cursorY = y + 112;
   for (const [leftLabel, leftValue, rightLabel, rightValue] of rows) {
-    drawCompactStat(x + inset + 2, cursorY, 112, leftLabel, leftValue);
-    drawCompactStat(x + inset + 134, cursorY, 112, rightLabel, rightValue);
-    cursorY += 27;
+    drawCompactStat(x + inset, cursorY, 96, leftLabel, leftValue);
+    drawCompactStat(x + inset + 126, cursorY, 96, rightLabel, rightValue);
+    cursorY += 24;
   }
 }
 
 function drawCompactStat(x: number, y: number, w: number, label: string, value: string): void {
-  ctx.fillStyle = "rgba(34, 18, 9, 0.56)";
-  roundRect(x, y, w, 22, 5, true);
-  text(label, x + 9, y + 5, 12, "#d6b577");
-  text(value, x + w - 9, y + 5, 13, "#ffe2a5", "right");
+  text(label, x, y + 2, 13, "#3a1a0a", "left", undefined, "#f2d99b");
+  text(value, x + w, y + 2, 14, "#140904", "right", undefined, "#f2d99b");
 }
 
 function drawStatChip(x: number, y: number, w: number, label: string, value: string): void {
-  ctx.fillStyle = "rgba(38, 20, 10, 0.68)";
-  roundRect(x, y, w, 23, 5, true);
-  text(label, x + 9, y + 5, 12, "#e0c28a");
-  text(value, x + w - 9, y + 5, 12, "#ffe6aa", "right");
+  text(label, x, y + 4, 13, "#3a1a0a", "left", undefined, "#f2d99b");
+  text(value, x + w, y + 4, 13, "#140904", "right", undefined, "#f2d99b");
 }
 
 function drawDivider(x: number, y: number, w: number): void {
@@ -1177,12 +1200,17 @@ function drawEffectRow(
   w: number,
   row: { active: boolean; description: string },
 ): void {
-  ctx.fillStyle = "rgba(250, 224, 160, 0.38)";
-  roundRect(x, y, w, 25, 5, true);
-  ctx.fillStyle = row.active ? "rgba(122, 46, 20, 0.82)" : "rgba(70, 55, 39, 0.72)";
-  roundRect(x + 7, y + 4, 56, 17, 4, true);
-  text(row.active ? "已触发" : "未触发", x + 35, y + 5, 11, "#ffe4aa", "center");
-  text(row.description, x + 74, y + 5, 12, "#2f1a0d");
+  text(
+    row.active ? "已触发" : "未触发",
+    x,
+    y + 4,
+    13,
+    row.active ? "#7a2e14" : "#4b3020",
+    "left",
+    undefined,
+    "#f2d99b",
+  );
+  text(row.description, x + 80, y + 4, 13, "#140904", "left", undefined, "#f2d99b");
 }
 
 function roundRect(x: number, y: number, w: number, h: number, r: number, fill: boolean): void {
