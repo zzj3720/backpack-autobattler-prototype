@@ -29,9 +29,9 @@ const BAG_W = Math.round(BAG_H * (BAG_SOURCE_W / BAG_SOURCE_H));
 const BAG_X = (WIDTH - BAG_W) / 2;
 const BAG_OPEN_Y = 226;
 const BAG_CLOSED_Y = 690;
-const REWARD_CARD_W = 288;
-const REWARD_CARD_H = 72;
-const REWARD_CARD_GAP = 16;
+const REWARD_CARD_W = 320;
+const REWARD_CARD_H = 80;
+const REWARD_CARD_GAP = 20;
 
 const rarityLabel: Record<Rarity, string> = {
   common: "普通",
@@ -455,7 +455,7 @@ function drawRewardChoices(): void {
     return;
   }
 
-  const y = BAG_OPEN_Y - 122;
+  const y = BAG_OPEN_Y - 132;
   const totalW =
     REWARD_CARD_W * snapshot.rewards.length + REWARD_CARD_GAP * (snapshot.rewards.length - 1);
   let x = (WIDTH - totalW) / 2;
@@ -590,10 +590,19 @@ function rewardCard(x: number, y: number, item: ItemDef): void {
     pointer.y <= y + REWARD_CARD_H;
   const cardSprite = rewardCardSprites[item.rarity];
   drawSprite(hovered ? cardSprite.hover : cardSprite.normal, x, y, REWARD_CARD_W, REWARD_CARD_H, 0);
-  drawSprite(itemSprites[item.id], x + 17, y + 12, 48, 48, 5);
-  text(item.name, x + 86, y + 11, 15, "#f5f0dc");
-  text(`${rarityLabel[item.rarity]} | ${rewardStatSummary(item)}`, x + 86, y + 31, 12, "#9cb4bd");
-  wrapText(rewardEffectSummary(item), x + 86, y + 49, 168, 14, 11, "#f3d18a");
+  drawSprite(itemSprites[item.id], x + 19, y + 13, 54, 54, 5);
+  const textX = x + 96;
+  const textW = 174;
+  fittedText(item.name, textX, y + 13, textW, 15, "#f5f0dc");
+  fittedText(
+    `${rarityLabel[item.rarity]} | ${rewardStatSummary(item)}`,
+    textX,
+    y + 34,
+    textW,
+    12,
+    "#9cb4bd",
+  );
+  fittedText(rewardEffectSummary(item), textX, y + 54, textW, 12, "#f3d18a");
   hitZones.push({
     x,
     y,
@@ -1081,6 +1090,40 @@ function text(
   }
   ctx.fillStyle = color;
   ctx.fillText(value, x, y);
+}
+
+function fittedText(
+  value: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  size: number,
+  color: string,
+  align: CanvasTextAlign = "left",
+  family = "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+  outlineColor?: string,
+): void {
+  ctx.font = `${size}px ${family}`;
+  if (ctx.measureText(value).width <= maxWidth) {
+    text(value, x, y, size, color, align, family, outlineColor);
+    return;
+  }
+
+  const suffix = "...";
+  const chars = Array.from(value);
+  let low = 0;
+  let high = chars.length;
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    const candidate = `${chars.slice(0, mid).join("")}${suffix}`;
+    if (ctx.measureText(candidate).width <= maxWidth) {
+      low = mid;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  text(`${chars.slice(0, low).join("")}${suffix}`, x, y, size, color, align, family, outlineColor);
 }
 
 function wrapText(
