@@ -77,6 +77,11 @@ export interface FusionRecipe {
   resultItemId: string;
 }
 
+export interface PendingFusion {
+  recipeId: string;
+  instanceIds: string[];
+}
+
 export interface EnemyDef {
   id: string;
   name: string;
@@ -154,6 +159,7 @@ export interface GameState {
   nextEnemyId: number;
   player: PlayerState;
   enemies: EnemyInstance[];
+  pendingFusions: PendingFusion[];
   combat: CombatClock;
   totals: DamageTotals;
   log: string[];
@@ -194,6 +200,20 @@ export interface EnemySnapshot {
   def: EnemyDef;
 }
 
+export interface FusionPreviewIngredient {
+  instanceId: string;
+  def: ItemDef;
+  x: number;
+  y: number;
+}
+
+export interface FusionPreview {
+  recipeId: string;
+  result: ItemDef;
+  ingredients: FusionPreviewIngredient[];
+  queued: boolean;
+}
+
 export interface GameSnapshot {
   seed: string;
   phase: Phase;
@@ -208,6 +228,7 @@ export interface GameSnapshot {
   items: ItemSnapshot[];
   rewards: ItemDef[];
   enemies: EnemySnapshot[];
+  fusionPreviews: FusionPreview[];
   totals: DamageTotals;
   log: string[];
   shareCode: string;

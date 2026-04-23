@@ -401,6 +401,8 @@ function drawBackpack(hoveredItem: ItemSnapshot | null): void {
     }
   }
 
+  drawFusionHints();
+
   if (hoveredItem) {
     drawItemLinkHighlights(hoveredItem);
   }
@@ -426,7 +428,77 @@ function drawBackpack(hoveredItem: ItemSnapshot | null): void {
     text(item.def.name.slice(0, 3), px + CELL / 2 - 2, py + CELL - 21, 10, "#ffe6aa", "center");
   }
 
+  drawFusionCellCues();
+  drawFusionNotice();
   drawPlayerStatusPanel(42, 432, 330, 250);
+}
+
+function drawFusionHints(): void {
+  const previews = snapshot.fusionPreviews.filter((preview) => !preview.queued);
+  if (snapshot.phase !== "draft" || previews.length === 0) {
+    return;
+  }
+
+  const pulse = 0.68 + Math.sin(performance.now() / 180) * 0.16;
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.shadowColor = "rgba(119, 255, 203, 0.72)";
+  ctx.shadowBlur = 10;
+  for (const preview of previews) {
+    const centers = preview.ingredients.map((ingredient) => cellCenter(ingredient.x, ingredient.y));
+    ctx.strokeStyle = `rgba(117, 245, 195, ${pulse})`;
+    ctx.lineWidth = 4;
+    for (let index = 1; index < centers.length; index += 1) {
+      line(centers[index - 1]!.x, centers[index - 1]!.y, centers[index]!.x, centers[index]!.y);
+    }
+  }
+  ctx.restore();
+}
+
+function drawFusionCellCues(): void {
+  const previews = snapshot.fusionPreviews.filter((preview) => !preview.queued);
+  if (snapshot.phase !== "draft" || previews.length === 0) {
+    return;
+  }
+
+  const pulse = 0.68 + Math.sin(performance.now() / 180) * 0.16;
+  ctx.save();
+  ctx.shadowColor = "rgba(119, 255, 203, 0.72)";
+  ctx.shadowBlur = 8;
+  for (const preview of previews) {
+    for (const ingredient of preview.ingredients) {
+      drawFusionCellCue(ingredient.x, ingredient.y, pulse);
+    }
+  }
+  ctx.restore();
+}
+
+function drawFusionCellCue(x: number, y: number, alpha: number): void {
+  const origin = gridOrigin();
+  const px = origin.x + x * CELL;
+  const py = origin.y + y * CELL;
+  ctx.fillStyle = `rgba(63, 196, 144, ${alpha * 0.18})`;
+  roundRect(px + 2, py + 2, CELL - 8, CELL - 8, 7, true);
+  ctx.strokeStyle = `rgba(144, 255, 207, ${alpha})`;
+  ctx.lineWidth = 3;
+  roundRect(px + 1, py + 1, CELL - 6, CELL - 6, 7, false);
+  ctx.fillStyle = `rgba(13, 24, 19, ${0.72 + alpha * 0.12})`;
+  roundRect(px + CELL - 23, py + 5, 17, 17, 5, true);
+  text("合", px + CELL - 14, py + 6, 12, "#dfffe7", "center", '"Songti SC", Georgia, serif');
+}
+
+function drawFusionNotice(): void {
+  const previews = snapshot.fusionPreviews.filter((preview) => !preview.queued);
+  if (snapshot.phase !== "draft" || previews.length === 0) {
+    return;
+  }
+
+  const label =
+    previews.length === 1
+      ? `战后合成: ${previews[0]!.result.name}`
+      : `战后合成: ${previews[0]!.result.name} 等 ${previews.length} 组`;
+  drawSmallSeal(BAG_X + 76, backpackVisualY + 82, BAG_W - 152, label);
 }
 
 function drawItemLinkHighlights(item: ItemSnapshot): void {
@@ -589,9 +661,28 @@ function drawBattleLedger(): void {
   text("战绩", x, y, 18, "#f3d18a", "left", '"Songti SC", Georgia, serif');
   text(`击杀 ${snapshot.totals.kills}`, x, y + 30, 14, "#d6c5a1");
   text(`伤害 ${Math.round(snapshot.totals.damageDone)}`, x, y + 52, 14, "#d6c5a1");
-  for (const lineText of snapshot.log.slice(-2)) {
-    wrapText(lineText, x, y + 82, 230, 18, 12, "#aeb8ad");
+  let cursorY = y + 82;
+  const queuedFusions = snapshot.fusionPreviews.filter((preview) => preview.queued);
+  if (queuedFusions.length > 0) {
+    text("战后合成", x, cursorY, 14, "#74f5c3");
+    cursorY += 21;
+    cursorY += wrapText(fusionPreviewSummary(queuedFusions), x, cursorY, 230, 17, 12, "#d6c5a1");
+    cursorY += 8;
   }
+  for (const lineText of snapshot.log.slice(-2)) {
+    cursorY += wrapText(lineText, x, cursorY, 230, 18, 12, "#aeb8ad");
+  }
+}
+
+function fusionPreviewSummary(previews: GameSnapshot["fusionPreviews"]): string {
+  const labels = previews.map((preview) => {
+    const ingredients = preview.ingredients.map((ingredient) => ingredient.def.name).join(" + ");
+    return `${ingredients} -> ${preview.result.name}`;
+  });
+  if (labels.length <= 2) {
+    return labels.join("；");
+  }
+  return `${labels.slice(0, 2).join("；")} 等 ${labels.length} 组`;
 }
 
 function rewardCard(x: number, y: number, item: ItemDef): void {
@@ -1261,7 +1352,7 @@ function drawBackpackBody(x: number, y: number, w: number, h: number, open: bool
 function drawSmallSeal(x: number, y: number, w: number, label: string): void {
   const h = 28;
   drawNinePatch(uiSprites.smallSeal, x, y, w, h, 24);
-  text(label, x + w / 2, y + 7, 13, "#d7c394", "center");
+  fittedText(label, x + w / 2, y + 7, w - 36, 13, "#d7c394", "center");
 }
 
 function drawCellEmptyState(x: number, y: number): void {

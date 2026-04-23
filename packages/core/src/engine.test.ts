@@ -58,21 +58,50 @@ describe("backpack core", () => {
     assert.ok(state.totals.kills > 0);
   });
 
-  it("auto-fuses matching item recipes around the newly added item", () => {
-    const state = createGame("fusion-smoke");
-    dispatchCommand(state, { type: "debugAddItem", itemId: "rusty_blade" });
-    let snapshot = querySnapshot(state);
+  it("previews adjacent fusions and resolves them after a battle", () => {
+    const fusionContent = {
+      ...defaultContent,
+      waves: [
+        { id: "empty_1", name: "空矿道", enemies: [], rewardBias: 0 },
+        { id: "empty_2", name: "回营", enemies: [], rewardBias: 0 },
+      ],
+    };
+    const state = createGame("fusion-smoke", fusionContent);
+    dispatchCommand(state, { type: "debugAddItem", itemId: "rusty_blade" }, fusionContent);
+    let snapshot = querySnapshot(state, fusionContent);
+    const addedBlade = snapshot.items.find(
+      (item) => item.def.id === "rusty_blade" && item.instance.x === 0 && item.instance.y === 0,
+    )!;
 
+    assert.equal(snapshot.items.filter((item) => item.def.id === "rusty_blade").length, 2);
+    assert.equal(snapshot.items.filter((item) => item.def.id === "iron_dagger").length, 0);
+    assert.equal(snapshot.fusionPreviews.length, 0);
+
+    dispatchCommand(
+      state,
+      { type: "moveItem", instanceId: addedBlade.instance.id, x: 1, y: 0 },
+      fusionContent,
+    );
+    snapshot = querySnapshot(state, fusionContent);
+
+    assert.equal(snapshot.fusionPreviews.length, 1);
+    assert.equal(snapshot.fusionPreviews[0]!.result.id, "iron_dagger");
+    assert.equal(snapshot.fusionPreviews[0]!.queued, false);
+
+    dispatchCommand(state, { type: "startBattle" }, fusionContent);
+    snapshot = querySnapshot(state, fusionContent);
+
+    assert.equal(snapshot.phase, "battle");
+    assert.equal(snapshot.items.filter((item) => item.def.id === "rusty_blade").length, 2);
+    assert.equal(snapshot.fusionPreviews[0]!.queued, true);
+
+    tickGame(state, 50, fusionContent);
+    snapshot = querySnapshot(state, fusionContent);
+
+    assert.equal(snapshot.phase, "draft");
     assert.equal(snapshot.items.filter((item) => item.def.id === "rusty_blade").length, 0);
     assert.equal(snapshot.items.filter((item) => item.def.id === "iron_dagger").length, 1);
-
-    dispatchCommand(state, { type: "debugAddItem", itemId: "poison_vial" });
-    dispatchCommand(state, { type: "debugAddItem", itemId: "poison_vial" });
-    snapshot = querySnapshot(state);
-
-    assert.equal(snapshot.items.filter((item) => item.def.id === "venom_gland").length, 0);
-    assert.equal(snapshot.items.filter((item) => item.def.id === "serpent_censer").length, 1);
-    assert.ok(snapshot.log.some((line) => line.includes("合成")));
+    assert.ok(snapshot.log.some((line) => line.includes("战后合成")));
   });
 
   it("defines a three-act campaign with boss checkpoints every five waves", () => {

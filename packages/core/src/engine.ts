@@ -13,9 +13,11 @@ import {
   type GameContent,
   type GameSnapshot,
   type GameState,
+  type FusionPreview,
   type ItemBuildBreakdown,
   type ItemDef,
   type ItemInstance,
+  type PendingFusion,
   type Rarity,
   type StatKey,
   type Stats,
@@ -70,6 +72,7 @@ export function createGame(seed = "daily-seed", content = defaultContent): GameS
     nextEnemyId: 1,
     player: { hp: BASE_STATS.maxHp, maxHp: BASE_STATS.maxHp },
     enemies: [],
+    pendingFusions: [],
     combat: { playerAttackTimerMs: 0, dotTimerMs: 0 },
     totals: createDamageTotals(),
     log: [],
@@ -110,7 +113,6 @@ export function dispatchCommand(
       }
       state.rewards = [];
       pushLog(state, `拿到 ${getItemDef(content, command.itemId).name}。`);
-      applyFusions(state, content, placed.id);
       syncPlayerStats(state, content, true);
       return state;
     }
@@ -130,12 +132,16 @@ export function dispatchCommand(
         return state;
       }
       syncPlayerStats(state, content, false);
+      state.pendingFusions = createPendingFusions(state, content);
       spawnWave(state, content);
       state.phase = "battle";
       state.waveTimeMs = 0;
       state.combat.playerAttackTimerMs = 180;
       state.combat.dotTimerMs = 500;
       pushLog(state, `${currentWave(content, state).name} 开始。`);
+      if (state.pendingFusions.length > 0) {
+        pushLog(state, `战后合成预备：${formatPendingFusionSummary(state, content)}。`);
+      }
       return state;
     }
 
@@ -143,7 +149,6 @@ export function dispatchCommand(
       const placed = addItemFirstOpen(state, command.itemId, content);
       if (placed) {
         pushLog(state, `营地补给：加入 ${getItemDef(content, command.itemId).name}。`);
-        applyFusions(state, content, placed.id);
         syncPlayerStats(state, content, true);
       }
       return state;
@@ -292,6 +297,7 @@ export function querySnapshot(state: GameState, content = defaultContent): GameS
       instance: enemy,
       def: getEnemyDef(content, enemy.defId),
     })),
+    fusionPreviews: createFusionPreviews(state, content),
     totals: cloneTotals(state.totals),
     log: state.log.slice(-8),
     shareCode: createShareCode(state),
@@ -412,57 +418,235 @@ function moveItem(
   setCell(state, x, y, instanceId);
 }
 
-function applyFusions(state: GameState, content: GameContent, focusInstanceId: string): void {
-  let focus = focusInstanceId;
-  while (state.items[focus]) {
-    const match = findFusionMatch(state, content, focus);
+interface FusionMatch {
+  recipe: GameContent["fusions"][number];
+  instances: ItemInstance[];
+}
+
+function createPendingFusions(state: GameState, content: GameContent): PendingFusion[] {
+  return findAdjacentFusionMatches(state, content).map((match) => ({
+    recipeId: match.recipe.id,
+    instanceIds: match.instances.map((instance) => instance.id),
+  }));
+}
+
+function createFusionPreviews(state: GameState, content: GameContent): FusionPreview[] {
+  const matches =
+    state.phase === "battle"
+      ? state.pendingFusions
+          .map((pending) => pendingFusionToMatch(state, content, pending))
+          .filter((match): match is FusionMatch => match !== null)
+      : state.phase === "draft"
+        ? findAdjacentFusionMatches(state, content)
+        : [];
+
+  return matches.map((match) => ({
+    recipeId: match.recipe.id,
+    result: getItemDef(content, match.recipe.resultItemId),
+    ingredients: match.instances.map((instance) => ({
+      instanceId: instance.id,
+      def: getItemDef(content, instance.defId),
+      x: instance.x,
+      y: instance.y,
+    })),
+    queued: state.phase === "battle",
+  }));
+}
+
+function applyPendingFusions(state: GameState, content: GameContent): void {
+  const pendingFusions = state.pendingFusions.slice();
+  state.pendingFusions = [];
+  for (const pending of pendingFusions) {
+    const match = pendingFusionToMatch(state, content, pending);
     if (!match) {
-      return;
+      continue;
     }
-
-    const anchor = state.items[focus]!;
-    const x = anchor.x;
-    const y = anchor.y;
-    const ingredientNames = match.instances.map(
-      (instance) => getItemDef(content, instance.defId).name,
-    );
-    for (const instance of match.instances) {
-      setCell(state, instance.x, instance.y, null);
-      delete state.items[instance.id];
-    }
-
-    const result = addItemAt(state, match.recipe.resultItemId, x, y, content);
-    const resultName = getItemDef(content, result.defId).name;
-    pushLog(state, `合成 ${ingredientNames.join(" + ")} -> ${resultName}。`);
-    focus = result.id;
+    applyFusionMatch(state, content, match);
   }
 }
 
-function findFusionMatch(
+function applyFusionMatch(state: GameState, content: GameContent, match: FusionMatch): void {
+  const anchor = match.instances[0]!;
+  const x = anchor.x;
+  const y = anchor.y;
+  const ingredientNames = match.instances.map(
+    (instance) => getItemDef(content, instance.defId).name,
+  );
+  for (const instance of match.instances) {
+    setCell(state, instance.x, instance.y, null);
+    delete state.items[instance.id];
+  }
+
+  const result = addItemAt(state, match.recipe.resultItemId, x, y, content);
+  const resultName = getItemDef(content, result.defId).name;
+  pushLog(state, `战后合成 ${ingredientNames.join(" + ")} -> ${resultName}。`);
+}
+
+function formatPendingFusionSummary(state: GameState, content: GameContent): string {
+  const labels = state.pendingFusions
+    .map((pending) => {
+      const match = pendingFusionToMatch(state, content, pending);
+      return match ? fusionLabel(match, content) : null;
+    })
+    .filter((label): label is string => label !== null);
+  if (labels.length <= 2) {
+    return labels.join("；");
+  }
+  return `${labels.slice(0, 2).join("；")} 等 ${labels.length} 组`;
+}
+
+function fusionLabel(match: FusionMatch, content: GameContent): string {
+  const ingredientNames = match.instances.map(
+    (instance) => getItemDef(content, instance.defId).name,
+  );
+  const resultName = getItemDef(content, match.recipe.resultItemId).name;
+  return `${ingredientNames.join(" + ")} -> ${resultName}`;
+}
+
+function pendingFusionToMatch(
   state: GameState,
   content: GameContent,
-  focusInstanceId: string,
-): { recipe: GameContent["fusions"][number]; instances: ItemInstance[] } | null {
-  const items = Object.values(state.items);
+  pending: PendingFusion,
+): FusionMatch | null {
+  const recipe = content.fusions.find((candidate) => candidate.id === pending.recipeId);
+  if (!recipe) {
+    return null;
+  }
+  const instances = pending.instanceIds.map((id) => state.items[id]);
+  if (instances.some((instance) => instance === undefined)) {
+    return null;
+  }
+  const match = { recipe, instances: instances as ItemInstance[] };
+  if (!matchesRecipeIngredients(match) || !instancesAreConnected(match.instances)) {
+    return null;
+  }
+  return match;
+}
+
+function findAdjacentFusionMatches(state: GameState, content: GameContent): FusionMatch[] {
+  const used = new Set<string>();
+  const matches: FusionMatch[] = [];
   for (const recipe of content.fusions) {
-    const used = new Set<string>();
-    const instances: ItemInstance[] = [];
-    for (const ingredientId of recipe.ingredients) {
-      const instance = items.find(
-        (candidate) => candidate.defId === ingredientId && !used.has(candidate.id),
-      );
-      if (!instance) {
-        instances.length = 0;
-        break;
+    for (const instances of findRecipeCandidates(state, recipe)) {
+      if (instances.some((instance) => used.has(instance.id))) {
+        continue;
       }
-      used.add(instance.id);
-      instances.push(instance);
-    }
-    if (instances.some((instance) => instance.id === focusInstanceId)) {
-      return { recipe, instances };
+      matches.push({ recipe, instances });
+      for (const instance of instances) {
+        used.add(instance.id);
+      }
     }
   }
-  return null;
+  return matches;
+}
+
+function findRecipeCandidates(
+  state: GameState,
+  recipe: GameContent["fusions"][number],
+): ItemInstance[][] {
+  const items = Object.values(state.items).sort(sortItems);
+  const candidates: ItemInstance[][] = [];
+  const seen = new Set<string>();
+
+  function choose(index: number, selected: ItemInstance[], used: Set<string>): void {
+    if (index === recipe.ingredients.length) {
+      if (!instancesAreConnected(selected)) {
+        return;
+      }
+      const key = selected
+        .map((instance) => instance.id)
+        .sort()
+        .join("|");
+      if (seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      candidates.push(selected.slice());
+      return;
+    }
+
+    const ingredientId = recipe.ingredients[index]!;
+    for (const item of items) {
+      if (item.defId !== ingredientId || used.has(item.id)) {
+        continue;
+      }
+      used.add(item.id);
+      selected.push(item);
+      choose(index + 1, selected, used);
+      selected.pop();
+      used.delete(item.id);
+    }
+  }
+
+  choose(0, [], new Set<string>());
+  return candidates.sort(compareFusionCandidates);
+}
+
+function compareFusionCandidates(left: ItemInstance[], right: ItemInstance[]): number {
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    const leftItem = left[index];
+    const rightItem = right[index];
+    if (!leftItem || !rightItem) {
+      return left.length - right.length;
+    }
+    const itemOrder = sortItems(leftItem, rightItem);
+    if (itemOrder !== 0) {
+      return itemOrder;
+    }
+  }
+  return 0;
+}
+
+function matchesRecipeIngredients(match: FusionMatch): boolean {
+  return sameCounts(
+    match.recipe.ingredients,
+    match.instances.map((instance) => instance.defId),
+  );
+}
+
+function sameCounts(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  const counts = new Map<string, number>();
+  for (const value of left) {
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  for (const value of right) {
+    const count = counts.get(value) ?? 0;
+    if (count === 0) {
+      return false;
+    }
+    if (count === 1) {
+      counts.delete(value);
+    } else {
+      counts.set(value, count - 1);
+    }
+  }
+  return counts.size === 0;
+}
+
+function instancesAreConnected(instances: ItemInstance[]): boolean {
+  if (instances.length < 2) {
+    return false;
+  }
+  const remaining = new Set(instances.map((instance) => instance.id));
+  const stack = [instances[0]!];
+  remaining.delete(instances[0]!.id);
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    for (const instance of instances) {
+      if (
+        remaining.has(instance.id) &&
+        Math.abs(instance.x - current.x) + Math.abs(instance.y - current.y) === 1
+      ) {
+        remaining.delete(instance.id);
+        stack.push(instance);
+      }
+    }
+  }
+  return remaining.size === 0;
 }
 
 function spawnWave(state: GameState, content: GameContent): void {
@@ -639,6 +823,7 @@ function removeDeadEnemies(state: GameState): void {
 function completeWave(state: GameState, content: GameContent): void {
   const waveName = currentWave(content, state).name;
   pushLog(state, `${waveName} 清空。`);
+  applyPendingFusions(state, content);
 
   if (state.waveIndex >= content.waves.length - 1) {
     state.phase = "victory";
