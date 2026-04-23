@@ -5,7 +5,7 @@ const playwrightModule =
 const { chromium } = await import(playwrightModule);
 
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1280, height: 760 } });
+const page = await browser.newPage({ viewport: { width: 1000, height: 760 } });
 const errors = [];
 page.on("pageerror", (error) => errors.push(error.message));
 page.on("console", (message) => {
@@ -16,8 +16,44 @@ page.on("console", (message) => {
 
 await page.goto(process.env.WEB_SMOKE_URL ?? "http://127.0.0.1:5173", { waitUntil: "networkidle" });
 await page.waitForSelector("#game");
-await page.mouse.click(372, 220);
-await page.mouse.click(790, 692);
+
+async function logicalPoint(x, y) {
+  return page.$eval(
+    "#game",
+    (canvas, point) => {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: rect.left + (point.x / 1280) * rect.width,
+        y: rect.top + (point.y / 760) * rect.height,
+      };
+    },
+    { x, y },
+  );
+}
+
+async function logicalClick(x, y) {
+  const point = await logicalPoint(x, y);
+  await page.mouse.click(point.x, point.y);
+}
+
+async function logicalDrag(fromX, fromY, toX, toY) {
+  const from = await logicalPoint(fromX, fromY);
+  const to = await logicalPoint(toX, toY);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 8 });
+  await page.mouse.up();
+}
+
+await logicalClick(336, 140);
+await logicalDrag(521, 445, 753, 619);
+const draftSnapshot = await page.evaluate(() => window.__backpackDebug?.());
+if (!draftSnapshot?.items.some((item) => item.instance.x === 4 && item.instance.y === 4)) {
+  throw new Error(
+    `Expected drag to land in the visual bottom-right cell: ${JSON.stringify(draftSnapshot)}`,
+  );
+}
+await logicalClick(754, 693);
 await page.waitForTimeout(700);
 
 const metrics = await page.evaluate(() => {

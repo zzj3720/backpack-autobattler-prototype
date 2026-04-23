@@ -1,5 +1,5 @@
 export const GRID_WIDTH = 5;
-export const GRID_HEIGHT = 4;
+export const GRID_HEIGHT = 5;
 export const GRID_CELLS = GRID_WIDTH * GRID_HEIGHT;
 
 export type Phase = "draft" | "battle" | "victory" | "defeat";

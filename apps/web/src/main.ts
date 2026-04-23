@@ -17,9 +17,15 @@ import "./style.css";
 
 const WIDTH = 1280;
 const HEIGHT = 760;
-const CELL = 58;
-const BAG_W = 520;
+const BAG_SOURCE_W = 421;
+const BAG_SOURCE_H = 466;
+const BAG_GRID_SOURCE_X = 80;
+const BAG_GRID_SOURCE_Y = 120;
+const BAG_GRID_SOURCE_CELL = 52;
+const BAG_SCALE = 520 / BAG_SOURCE_H;
+const CELL = Math.round(BAG_GRID_SOURCE_CELL * BAG_SCALE);
 const BAG_H = 520;
+const BAG_W = Math.round(BAG_H * (BAG_SOURCE_W / BAG_SOURCE_H));
 const BAG_X = (WIDTH - BAG_W) / 2;
 const BAG_OPEN_Y = 226;
 const BAG_CLOSED_Y = 690;
@@ -326,9 +332,9 @@ function drawBackpack(hoveredItem: ItemSnapshot | null): void {
   const origin = gridOrigin();
   for (let y = 0; y < GRID_HEIGHT; y += 1) {
     for (let x = 0; x < GRID_WIDTH; x += 1) {
-      const px = origin.x + x * CELL;
-      const py = origin.y + y * CELL;
-      drawInventorySlot(px, py, CELL - 8, CELL - 8);
+      if (!itemAtCell(x, y)) {
+        drawCellEmptyState(origin.x + x * CELL, origin.y + y * CELL);
+      }
     }
   }
 
@@ -790,8 +796,8 @@ function neighbors(x: number, y: number): Point[] {
 function cellCenter(x: number, y: number): Point {
   const origin = gridOrigin();
   return {
-    x: origin.x + x * CELL + (CELL - 8) / 2,
-    y: origin.y + y * CELL + (CELL - 8) / 2,
+    x: origin.x + x * CELL + (CELL - 4) / 2,
+    y: origin.y + y * CELL + (CELL - 4) / 2,
   };
 }
 
@@ -799,14 +805,19 @@ function strokeCell(x: number, y: number, color: string, width: number): void {
   const origin = gridOrigin();
   ctx.strokeStyle = color;
   ctx.lineWidth = width;
-  roundRect(origin.x + x * CELL, origin.y + y * CELL, CELL - 8, CELL - 8, 6, false);
+  roundRect(origin.x + x * CELL, origin.y + y * CELL, CELL - 4, CELL - 4, 6, false);
 }
 
 function pointerFromEvent(event: PointerEvent): Point {
   const rect = canvas.getBoundingClientRect();
+  const scale = Math.min(rect.width / WIDTH, rect.height / HEIGHT);
+  const contentWidth = WIDTH * scale;
+  const contentHeight = HEIGHT * scale;
+  const contentX = (rect.width - contentWidth) / 2;
+  const contentY = (rect.height - contentHeight) / 2;
   return {
-    x: ((event.clientX - rect.left) / rect.width) * WIDTH,
-    y: ((event.clientY - rect.top) / rect.height) * HEIGHT,
+    x: ((event.clientX - rect.left - contentX) / contentWidth) * WIDTH,
+    y: ((event.clientY - rect.top - contentY) / contentHeight) * HEIGHT,
   };
 }
 
@@ -1005,8 +1016,8 @@ function phaseLabel(): string {
 
 function gridOrigin(): Point {
   return {
-    x: BAG_X + 117,
-    y: backpackVisualY + 138,
+    x: BAG_X + BAG_GRID_SOURCE_X * BAG_SCALE,
+    y: backpackVisualY + BAG_GRID_SOURCE_Y * BAG_SCALE,
   };
 }
 
@@ -1058,8 +1069,11 @@ function drawSmallSeal(x: number, y: number, w: number, label: string): void {
   text(label, x + w / 2, y + 7, 13, "#d7c394", "center");
 }
 
-function drawInventorySlot(x: number, y: number, w: number, h: number): void {
-  drawSprite(uiSprites.inventorySlot, x, y, w, h, 0);
+function drawCellEmptyState(x: number, y: number): void {
+  ctx.save();
+  ctx.globalAlpha = 0.16;
+  drawSprite(uiSprites.inventorySlot, x + 2, y + 2, CELL - 8, CELL - 8, 0);
+  ctx.restore();
 }
 
 function drawStatLedger(x: number, y: number, w: number, h: number, value: string): void {
