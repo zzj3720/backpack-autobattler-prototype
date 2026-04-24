@@ -1,0 +1,811 @@
+{
+  "labels": [
+    {
+      "key": "ui.title",
+      "text": "背包构筑自动战斗",
+      "style": "title"
+    },
+    {
+      "key": "ui.bagClosed",
+      "text": "行囊已收起",
+      "style": "body"
+    },
+    {
+      "key": "ui.rewardChoose",
+      "text": "选择一件战利品",
+      "style": "section"
+    },
+    {
+      "key": "ui.battleStarted",
+      "text": "战鼓已响",
+      "style": "body"
+    },
+    {
+      "key": "ui.mineDepth",
+      "text": "矿坑深处",
+      "style": "body"
+    },
+    {
+      "key": "ui.records",
+      "text": "战绩",
+      "style": "body"
+    },
+    {
+      "key": "ui.postBattleFusion",
+      "text": "战后合成",
+      "style": "body"
+    },
+    {
+      "key": "ui.heroStatus",
+      "text": "英雄状态",
+      "style": "section"
+    },
+    {
+      "key": "ui.currentContribution",
+      "text": "当前贡献",
+      "style": "body"
+    },
+    {
+      "key": "ui.synergyStatus",
+      "text": "连携状态",
+      "style": "body"
+    },
+    {
+      "key": "ui.noSynergy",
+      "text": "无连携效果",
+      "style": "body"
+    },
+    {
+      "key": "ui.active",
+      "text": "已触发",
+      "style": "body"
+    },
+    {
+      "key": "ui.inactive",
+      "text": "未触发",
+      "style": "body"
+    },
+    {
+      "key": "ui.damage",
+      "text": "伤害",
+      "style": "body"
+    },
+    {
+      "key": "ui.kills",
+      "text": "击杀",
+      "style": "body"
+    },
+    {
+      "key": "ui.sigils",
+      "text": "纹章",
+      "style": "body"
+    },
+    {
+      "key": "ui.noBaseStats",
+      "text": "无基础数值",
+      "style": "body"
+    },
+    {
+      "key": "ui.victoryResult",
+      "text": "胜利结算",
+      "style": "event"
+    },
+    {
+      "key": "ui.defeatResult",
+      "text": "失败结算",
+      "style": "event"
+    },
+    {
+      "key": "ui.expeditionComplete",
+      "text": "远征完成",
+      "style": "body"
+    },
+    {
+      "key": "ui.expeditionStopped",
+      "text": "远征中止",
+      "style": "body"
+    },
+    {
+      "key": "ui.waveStart",
+      "text": "开战",
+      "style": "event"
+    },
+    {
+      "key": "ui.waveClear",
+      "text": "清空",
+      "style": "event"
+    },
+    {
+      "key": "ui.kill",
+      "text": "击破",
+      "style": "event"
+    },
+    {
+      "key": "ui.fusionComplete",
+      "text": "合成完成",
+      "style": "event"
+    },
+    {
+      "key": "ui.critical",
+      "text": "暴击",
+      "style": "critical"
+    },
+    {
+      "key": "ui.fusionMark",
+      "text": "合",
+      "style": "body"
+    },
+    {
+      "key": "ui.phaseBattle",
+      "text": "队伍自动交锋",
+      "style": "body"
+    },
+    {
+      "key": "ui.phasePaused",
+      "text": "沙漏凝住",
+      "style": "body"
+    },
+    {
+      "key": "ui.phaseVictory",
+      "text": "胜利",
+      "style": "body"
+    },
+    {
+      "key": "ui.phaseDefeat",
+      "text": "失败",
+      "style": "body"
+    },
+    {
+      "key": "ui.phaseDraft",
+      "text": "择宝与整备",
+      "style": "body"
+    },
+    {
+      "key": "button.startBattle",
+      "text": "敲响战鼓",
+      "style": "button"
+    },
+    {
+      "key": "button.restart",
+      "text": "重启远征",
+      "style": "button"
+    },
+    {
+      "key": "button.pause",
+      "text": "凝住沙漏",
+      "style": "button"
+    },
+    {
+      "key": "button.resume",
+      "text": "转动沙漏",
+      "style": "button"
+    },
+    {
+      "key": "item.rusty_blade.name",
+      "text": "粗铁短剑",
+      "style": "itemName"
+    },
+    {
+      "key": "item.wooden_shield.name",
+      "text": "旧木盾",
+      "style": "itemName"
+    },
+    {
+      "key": "item.poison_vial.name",
+      "text": "毒雾瓶",
+      "style": "itemName"
+    },
+    {
+      "key": "item.spark_stone.name",
+      "text": "火花石",
+      "style": "itemName"
+    },
+    {
+      "key": "item.lucky_coin.name",
+      "text": "裂纹金币",
+      "style": "itemName"
+    },
+    {
+      "key": "item.iron_dagger.name",
+      "text": "铁脊匕首",
+      "style": "itemName"
+    },
+    {
+      "key": "item.gear_spring.name",
+      "text": "齿轮发条",
+      "style": "itemName"
+    },
+    {
+      "key": "item.oil_lamp.name",
+      "text": "焦油灯",
+      "style": "itemName"
+    },
+    {
+      "key": "item.thorn_bark.name",
+      "text": "荆棘树皮",
+      "style": "itemName"
+    },
+    {
+      "key": "item.jade_leaf.name",
+      "text": "碧玉叶",
+      "style": "itemName"
+    },
+    {
+      "key": "item.war_drum.name",
+      "text": "裂鼓",
+      "style": "itemName"
+    },
+    {
+      "key": "item.mirror_shard.name",
+      "text": "镜裂片",
+      "style": "itemName"
+    },
+    {
+      "key": "item.blood_contract.name",
+      "text": "血契",
+      "style": "itemName"
+    },
+    {
+      "key": "item.bone_ring.name",
+      "text": "骨戒",
+      "style": "itemName"
+    },
+    {
+      "key": "item.phoenix_ember.name",
+      "text": "凤烬",
+      "style": "itemName"
+    },
+    {
+      "key": "item.black_star.name",
+      "text": "黑星",
+      "style": "itemName"
+    },
+    {
+      "key": "item.venom_gland.name",
+      "text": "蛇毒腺",
+      "style": "itemName"
+    },
+    {
+      "key": "item.serpent_censer.name",
+      "text": "蛇烟炉",
+      "style": "itemName"
+    },
+    {
+      "key": "item.plague_idol.name",
+      "text": "疫病神像",
+      "style": "itemName"
+    },
+    {
+      "key": "item.ember_saber.name",
+      "text": "余烬弯刀",
+      "style": "itemName"
+    },
+    {
+      "key": "item.forge_heart.name",
+      "text": "熔炉心",
+      "style": "itemName"
+    },
+    {
+      "key": "item.clockwork_halberd.name",
+      "text": "钟械戟",
+      "style": "itemName"
+    },
+    {
+      "key": "item.siege_chime.name",
+      "text": "攻城鸣钟",
+      "style": "itemName"
+    },
+    {
+      "key": "item.guardian_root.name",
+      "text": "守卫根",
+      "style": "itemName"
+    },
+    {
+      "key": "item.elder_moss.name",
+      "text": "古苔",
+      "style": "itemName"
+    },
+    {
+      "key": "item.moon_eye.name",
+      "text": "月眼",
+      "style": "itemName"
+    },
+    {
+      "key": "item.astral_core.name",
+      "text": "星核",
+      "style": "itemName"
+    },
+    {
+      "key": "item.lich_crown.name",
+      "text": "巫妖冠",
+      "style": "itemName"
+    },
+    {
+      "key": "enemy.slime.name",
+      "text": "泥怪",
+      "style": "enemyName"
+    },
+    {
+      "key": "enemy.rat.name",
+      "text": "裂齿鼠",
+      "style": "enemyName"
+    },
+    {
+      "key": "enemy.imp.name",
+      "text": "火噬小鬼",
+      "style": "enemyName"
+    },
+    {
+      "key": "enemy.brute.name",
+      "text": "铁皮蛮兵",
+      "style": "enemyName"
+    },
+    {
+      "key": "enemy.boss.name",
+      "text": "矿心首领",
+      "style": "enemyName"
+    },
+    {
+      "key": "enemy.slime_veteran.name",
+      "text": "盐蚀泥怪",
+      "style": "enemyName"
+    },
+    {
+      "key": "enemy.rat_veteran.name",
+      "text": "黑牙裂齿鼠",
+      "style": "enemyName"
+    },
+    {
+      "key": "enemy.imp_veteran.name",
+      "text": "焦焰小鬼",
+      "style": "enemyName"
+    },
+    {
+      "key": "enemy.brute_veteran.name",
+      "text": "铆甲蛮兵",
+      "style": "enemyName"
+    },
+    {
+      "key": "enemy.boss_forge.name",
+      "text": "熔炉督军",
+      "style": "enemyName"
+    },
+    {
+      "key": "enemy.slime_elder.name",
+      "text": "矿毒泥怪",
+      "style": "enemyName"
+    },
+    {
+      "key": "enemy.rat_elder.name",
+      "text": "晶齿鼠王",
+      "style": "enemyName"
+    },
+    {
+      "key": "enemy.imp_elder.name",
+      "text": "余烬执火者",
+      "style": "enemyName"
+    },
+    {
+      "key": "enemy.brute_elder.name",
+      "text": "黑铁蛮将",
+      "style": "enemyName"
+    },
+    {
+      "key": "enemy.boss_core.name",
+      "text": "矿心灾厄",
+      "style": "enemyName"
+    },
+    {
+      "key": "wave.w1.name",
+      "text": "潮湿入口",
+      "style": "waveName"
+    },
+    {
+      "key": "wave.w2.name",
+      "text": "裂齿巷道",
+      "style": "waveName"
+    },
+    {
+      "key": "wave.w3.name",
+      "text": "焦油火线",
+      "style": "waveName"
+    },
+    {
+      "key": "wave.w4.name",
+      "text": "铁皮门厅",
+      "style": "waveName"
+    },
+    {
+      "key": "wave.w5.name",
+      "text": "矿心 Boss",
+      "style": "waveName"
+    },
+    {
+      "key": "wave.w6.name",
+      "text": "盐蚀矿渠",
+      "style": "waveName"
+    },
+    {
+      "key": "wave.w7.name",
+      "text": "黑牙伏击",
+      "style": "waveName"
+    },
+    {
+      "key": "wave.w8.name",
+      "text": "铆甲升降井",
+      "style": "waveName"
+    },
+    {
+      "key": "wave.w9.name",
+      "text": "熔炉前厅",
+      "style": "waveName"
+    },
+    {
+      "key": "wave.w10.name",
+      "text": "熔炉 Boss",
+      "style": "waveName"
+    },
+    {
+      "key": "wave.w11.name",
+      "text": "晶齿回廊",
+      "style": "waveName"
+    },
+    {
+      "key": "wave.w12.name",
+      "text": "余烬裂缝",
+      "style": "waveName"
+    },
+    {
+      "key": "wave.w13.name",
+      "text": "黑铁压阵",
+      "style": "waveName"
+    },
+    {
+      "key": "wave.w14.name",
+      "text": "灾厄门前",
+      "style": "waveName"
+    },
+    {
+      "key": "wave.w15.name",
+      "text": "矿心灾厄",
+      "style": "waveName"
+    },
+    {
+      "key": "rarity.common",
+      "text": "普通",
+      "style": "rarity-common"
+    },
+    {
+      "key": "rarity.uncommon",
+      "text": "优秀",
+      "style": "rarity-uncommon"
+    },
+    {
+      "key": "rarity.rare",
+      "text": "稀有",
+      "style": "rarity-rare"
+    },
+    {
+      "key": "rarity.epic",
+      "text": "史诗",
+      "style": "rarity-epic"
+    },
+    {
+      "key": "stat.maxHp",
+      "text": "生命",
+      "style": "stat"
+    },
+    {
+      "key": "stat.attack",
+      "text": "攻击",
+      "style": "stat"
+    },
+    {
+      "key": "stat.attackSpeed",
+      "text": "攻速",
+      "style": "stat"
+    },
+    {
+      "key": "stat.armor",
+      "text": "护甲",
+      "style": "stat"
+    },
+    {
+      "key": "stat.regen",
+      "text": "回复",
+      "style": "stat"
+    },
+    {
+      "key": "stat.burn",
+      "text": "燃烧",
+      "style": "stat"
+    },
+    {
+      "key": "stat.poison",
+      "text": "毒",
+      "style": "stat"
+    },
+    {
+      "key": "stat.thorns",
+      "text": "反伤",
+      "style": "stat"
+    },
+    {
+      "key": "stat.critChance",
+      "text": "暴击",
+      "style": "stat"
+    },
+    {
+      "key": "tag.weapon",
+      "text": "武器",
+      "style": "tag"
+    },
+    {
+      "key": "tag.metal",
+      "text": "金属",
+      "style": "tag"
+    },
+    {
+      "key": "tag.shield",
+      "text": "盾牌",
+      "style": "tag"
+    },
+    {
+      "key": "tag.wood",
+      "text": "木质",
+      "style": "tag"
+    },
+    {
+      "key": "tag.poison",
+      "text": "毒系",
+      "style": "tag"
+    },
+    {
+      "key": "tag.alchemy",
+      "text": "炼金",
+      "style": "tag"
+    },
+    {
+      "key": "tag.fire",
+      "text": "火系",
+      "style": "tag"
+    },
+    {
+      "key": "tag.stone",
+      "text": "石质",
+      "style": "tag"
+    },
+    {
+      "key": "tag.trinket",
+      "text": "饰品",
+      "style": "tag"
+    },
+    {
+      "key": "tag.machine",
+      "text": "机械",
+      "style": "tag"
+    },
+    {
+      "key": "tag.nature",
+      "text": "自然",
+      "style": "tag"
+    },
+    {
+      "key": "tag.sound",
+      "text": "声响",
+      "style": "tag"
+    },
+    {
+      "key": "tag.glass",
+      "text": "玻璃",
+      "style": "tag"
+    },
+    {
+      "key": "tag.curse",
+      "text": "诅咒",
+      "style": "tag"
+    }
+  ],
+  "lookups": {
+    "ui": {
+      "背包构筑自动战斗": "ui.title",
+      "行囊已收起": "ui.bagClosed",
+      "选择一件战利品": "ui.rewardChoose",
+      "战鼓已响": "ui.battleStarted",
+      "矿坑深处": "ui.mineDepth",
+      "战绩": "ui.records",
+      "战后合成": "ui.postBattleFusion",
+      "英雄状态": "ui.heroStatus",
+      "当前贡献": "ui.currentContribution",
+      "连携状态": "ui.synergyStatus",
+      "无连携效果": "ui.noSynergy",
+      "已触发": "ui.active",
+      "未触发": "ui.inactive",
+      "伤害": "ui.damage",
+      "击杀": "ui.kills",
+      "纹章": "ui.sigils",
+      "无基础数值": "ui.noBaseStats",
+      "胜利结算": "ui.victoryResult",
+      "失败结算": "ui.defeatResult",
+      "远征完成": "ui.expeditionComplete",
+      "远征中止": "ui.expeditionStopped",
+      "开战": "ui.waveStart",
+      "清空": "ui.waveClear",
+      "击破": "ui.kill",
+      "合成完成": "ui.fusionComplete",
+      "暴击": "ui.critical",
+      "合": "ui.fusionMark",
+      "队伍自动交锋": "ui.phaseBattle",
+      "沙漏凝住": "ui.phasePaused",
+      "胜利": "ui.phaseVictory",
+      "失败": "ui.phaseDefeat",
+      "择宝与整备": "ui.phaseDraft",
+      "敲响战鼓": "button.startBattle",
+      "重启远征": "button.restart",
+      "凝住沙漏": "button.pause",
+      "转动沙漏": "button.resume"
+    },
+    "item": {
+      "粗铁短剑": "item.rusty_blade.name",
+      "旧木盾": "item.wooden_shield.name",
+      "毒雾瓶": "item.poison_vial.name",
+      "火花石": "item.spark_stone.name",
+      "裂纹金币": "item.lucky_coin.name",
+      "铁脊匕首": "item.iron_dagger.name",
+      "齿轮发条": "item.gear_spring.name",
+      "焦油灯": "item.oil_lamp.name",
+      "荆棘树皮": "item.thorn_bark.name",
+      "碧玉叶": "item.jade_leaf.name",
+      "裂鼓": "item.war_drum.name",
+      "镜裂片": "item.mirror_shard.name",
+      "血契": "item.blood_contract.name",
+      "骨戒": "item.bone_ring.name",
+      "凤烬": "item.phoenix_ember.name",
+      "黑星": "item.black_star.name",
+      "蛇毒腺": "item.venom_gland.name",
+      "蛇烟炉": "item.serpent_censer.name",
+      "疫病神像": "item.plague_idol.name",
+      "余烬弯刀": "item.ember_saber.name",
+      "熔炉心": "item.forge_heart.name",
+      "钟械戟": "item.clockwork_halberd.name",
+      "攻城鸣钟": "item.siege_chime.name",
+      "守卫根": "item.guardian_root.name",
+      "古苔": "item.elder_moss.name",
+      "月眼": "item.moon_eye.name",
+      "星核": "item.astral_core.name",
+      "巫妖冠": "item.lich_crown.name"
+    },
+    "enemy": {
+      "泥怪": "enemy.slime.name",
+      "裂齿鼠": "enemy.rat.name",
+      "火噬小鬼": "enemy.imp.name",
+      "铁皮蛮兵": "enemy.brute.name",
+      "矿心首领": "enemy.boss.name",
+      "盐蚀泥怪": "enemy.slime_veteran.name",
+      "黑牙裂齿鼠": "enemy.rat_veteran.name",
+      "焦焰小鬼": "enemy.imp_veteran.name",
+      "铆甲蛮兵": "enemy.brute_veteran.name",
+      "熔炉督军": "enemy.boss_forge.name",
+      "矿毒泥怪": "enemy.slime_elder.name",
+      "晶齿鼠王": "enemy.rat_elder.name",
+      "余烬执火者": "enemy.imp_elder.name",
+      "黑铁蛮将": "enemy.brute_elder.name",
+      "矿心灾厄": "enemy.boss_core.name"
+    },
+    "wave": {
+      "潮湿入口": "wave.w1.name",
+      "裂齿巷道": "wave.w2.name",
+      "焦油火线": "wave.w3.name",
+      "铁皮门厅": "wave.w4.name",
+      "矿心 Boss": "wave.w5.name",
+      "盐蚀矿渠": "wave.w6.name",
+      "黑牙伏击": "wave.w7.name",
+      "铆甲升降井": "wave.w8.name",
+      "熔炉前厅": "wave.w9.name",
+      "熔炉 Boss": "wave.w10.name",
+      "晶齿回廊": "wave.w11.name",
+      "余烬裂缝": "wave.w12.name",
+      "黑铁压阵": "wave.w13.name",
+      "灾厄门前": "wave.w14.name",
+      "矿心灾厄": "wave.w15.name"
+    },
+    "rarity": {
+      "普通": "rarity.common",
+      "优秀": "rarity.uncommon",
+      "稀有": "rarity.rare",
+      "史诗": "rarity.epic"
+    },
+    "stat": {
+      "生命": "stat.maxHp",
+      "攻击": "stat.attack",
+      "攻速": "stat.attackSpeed",
+      "护甲": "stat.armor",
+      "回复": "stat.regen",
+      "燃烧": "stat.burn",
+      "毒": "stat.poison",
+      "反伤": "stat.thorns",
+      "暴击": "stat.critChance"
+    },
+    "tag": {
+      "武器": "tag.weapon",
+      "金属": "tag.metal",
+      "盾牌": "tag.shield",
+      "木质": "tag.wood",
+      "毒系": "tag.poison",
+      "炼金": "tag.alchemy",
+      "火系": "tag.fire",
+      "石质": "tag.stone",
+      "饰品": "tag.trinket",
+      "机械": "tag.machine",
+      "自然": "tag.nature",
+      "声响": "tag.sound",
+      "玻璃": "tag.glass",
+      "诅咒": "tag.curse"
+    }
+  },
+  "fixedAtlas": {
+    "width": 2048,
+    "height": 240
+  },
+  "damageAtlas": {
+    "width": 768,
+    "height": 492,
+    "chars": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "-"],
+    "kinds": {
+      "attack": {
+        "top": "#fff3b0",
+        "bottom": "#e49b3a",
+        "stroke": "#46210b",
+        "outer": "rgba(11, 5, 2, 0.92)",
+        "glow": "rgba(255, 208, 97, 0.38)",
+        "size": 44,
+        "advance": 31
+      },
+      "critical": {
+        "top": "#ffffff",
+        "bottom": "#ff3c2d",
+        "stroke": "#5a0803",
+        "outer": "rgba(12, 3, 1, 0.95)",
+        "glow": "rgba(255, 210, 64, 0.62)",
+        "size": 52,
+        "advance": 37
+      },
+      "poison": {
+        "top": "#d9ff9b",
+        "bottom": "#4fe56d",
+        "stroke": "#113a13",
+        "outer": "rgba(2, 15, 5, 0.95)",
+        "glow": "rgba(105, 255, 130, 0.36)",
+        "size": 43,
+        "advance": 30
+      },
+      "burn": {
+        "top": "#fff0a6",
+        "bottom": "#ff6c1f",
+        "stroke": "#5e1705",
+        "outer": "rgba(19, 5, 1, 0.94)",
+        "glow": "rgba(255, 119, 38, 0.48)",
+        "size": 44,
+        "advance": 31
+      },
+      "thorns": {
+        "top": "#e0fff2",
+        "bottom": "#78d6c2",
+        "stroke": "#143f39",
+        "outer": "rgba(3, 15, 14, 0.93)",
+        "glow": "rgba(122, 231, 208, 0.34)",
+        "size": 42,
+        "advance": 30
+      },
+      "enemy": {
+        "top": "#ffd1c0",
+        "bottom": "#ff574b",
+        "stroke": "#4c100a",
+        "outer": "rgba(18, 3, 2, 0.94)",
+        "glow": "rgba(255, 92, 72, 0.34)",
+        "size": 42,
+        "advance": 30
+      }
+    }
+  }
+}

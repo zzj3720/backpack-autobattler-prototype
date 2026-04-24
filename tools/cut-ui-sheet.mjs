@@ -38,6 +38,8 @@ const rendered = await page.evaluate(
     keyColor,
     tolerance,
     feather,
+    spillCleanup,
+    edgeContract,
     cropPadding,
     trimEdge,
   }) => {
@@ -65,6 +67,17 @@ const rendered = await page.evaluate(
       Math.max(Math.abs(r - keyColor.r), Math.abs(g - keyColor.g), Math.abs(b - keyColor.b));
     const despillChannel = (channel, key, alphaRatio) =>
       clamp(Math.round((channel - key * (1 - alphaRatio)) / Math.max(alphaRatio, 0.0001)), 0, 255);
+    const cleanupKeySpill = (r, g, b) => {
+      const channels = [r, g, b];
+      const keyChannels = [keyColor.r, keyColor.g, keyColor.b];
+      const protectedMax = Math.max(...channels.filter((_, index) => keyChannels[index] < 128), 0);
+      for (let index = 0; index < channels.length; index += 1) {
+        if (keyChannels[index] > 200 && channels[index] > protectedMax + 4) {
+          channels[index] = protectedMax + 4;
+        }
+      }
+      return channels;
+    };
 
     const outputs = [];
     const cells =
@@ -144,6 +157,33 @@ const rendered = await page.evaluate(
           data[index + 1] = despillChannel(data[index + 1], keyColor.g, finalAlphaRatio);
           data[index + 2] = despillChannel(data[index + 2], keyColor.b, finalAlphaRatio);
         }
+        if (spillCleanup) {
+          const cleaned = cleanupKeySpill(data[index], data[index + 1], data[index + 2]);
+          data[index] = cleaned[0];
+          data[index + 1] = cleaned[1];
+          data[index + 2] = cleaned[2];
+        }
+        minX = Math.min(minX, px);
+        minY = Math.min(minY, py);
+        maxX = Math.max(maxX, px);
+        maxY = Math.max(maxY, py);
+      }
+
+      if (edgeContract > 0) {
+        contractAlphaEdges(data, sw, sh, edgeContract);
+      }
+
+      minX = sw;
+      minY = sh;
+      maxX = -1;
+      maxY = -1;
+      for (let index = 0; index < data.length; index += 4) {
+        if (data[index + 3] === 0) {
+          continue;
+        }
+        const pixelIndex = index / 4;
+        const px = pixelIndex % sw;
+        const py = Math.floor(pixelIndex / sw);
         minX = Math.min(minX, px);
         minY = Math.min(minY, py);
         maxX = Math.max(maxX, px);
@@ -185,6 +225,40 @@ const rendered = await page.evaluate(
     }
 
     return outputs;
+
+    function contractAlphaEdges(data, width, height, amount) {
+      const sourceAlpha = new Uint8ClampedArray(width * height);
+      for (let index = 0; index < sourceAlpha.length; index += 1) {
+        sourceAlpha[index] = data[index * 4 + 3];
+      }
+      const radius = Math.max(1, Math.round(amount));
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          const alphaIndex = y * width + x;
+          if (sourceAlpha[alphaIndex] === 0) {
+            continue;
+          }
+          let nearTransparent = false;
+          for (let dy = -radius; dy <= radius && !nearTransparent; dy += 1) {
+            for (let dx = -radius; dx <= radius; dx += 1) {
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
+                nearTransparent = true;
+                break;
+              }
+              if (sourceAlpha[ny * width + nx] < 10) {
+                nearTransparent = true;
+                break;
+              }
+            }
+          }
+          if (nearTransparent) {
+            data[alphaIndex * 4 + 3] = Math.max(0, sourceAlpha[alphaIndex] - 170);
+          }
+        }
+      }
+    }
   },
   {
     imageUrl: dataUrl,
@@ -194,6 +268,8 @@ const rendered = await page.evaluate(
     keyColor: parseHexColor(args.key),
     tolerance: args.tolerance,
     feather: args.feather,
+    spillCleanup: args.spillCleanup,
+    edgeContract: args.edgeContract,
     cropPadding: args.cropPadding,
     trimEdge: args.trimEdge,
   },
@@ -222,6 +298,8 @@ console.log(
     key: normalizeHex(args.key),
     tolerance: args.tolerance,
     feather: args.feather,
+    spillCleanup: args.spillCleanup,
+    edgeContract: args.edgeContract,
     cropPadding: args.cropPadding,
     trimEdge: args.trimEdge,
     crops: rendered.map((item, index) => ({ output: args.outputs[index], crop: item.crop })),
@@ -238,6 +316,8 @@ function parseArgs(argv) {
     key: "ff00ff",
     tolerance: 60,
     feather: 24,
+    spillCleanup: false,
+    edgeContract: 0,
     cropPadding: 8,
     trimEdge: 0,
     help: false,
@@ -272,6 +352,12 @@ function parseArgs(argv) {
         break;
       case "--feather":
         options.feather = Number(argv[++index] ?? options.feather);
+        break;
+      case "--spill-cleanup":
+        options.spillCleanup = true;
+        break;
+      case "--edge-contract":
+        options.edgeContract = Number(argv[++index] ?? options.edgeContract);
         break;
       case "--crop-padding":
         options.cropPadding = Number(argv[++index] ?? options.cropPadding);
@@ -332,7 +418,7 @@ function printHelp(prefix = "") {
     --source public/assets/ui/source/health-bars-sheet.png \\
     --columns 3 --rows 2 \\
     --outputs public/assets/ui/bar-player-frame.png,public/assets/ui/bar-enemy-frame.png,... \\
-    --key ff00ff --tolerance 60 --feather 24 --crop-padding 8 --trim-edge 4
+    --key ff00ff --tolerance 60 --feather 24 --spill-cleanup --edge-contract 1 --crop-padding 8 --trim-edge 4
 
   node tools/cut-ui-sheet.mjs \\
     --source public/assets/ui/source/health-bars-sheet.png \\

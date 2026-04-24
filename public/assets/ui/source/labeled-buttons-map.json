@@ -1,0 +1,27 @@
+{
+  "mode": "imagegen built-in",
+  "source": "labeled-buttons-4x2-magenta-v1.png",
+  "notes": [
+    "Full button sprites include button material, frame, and fixed Chinese text together.",
+    "Row 1 is normal state; row 2 is pressed state.",
+    "Columns are start battle, restart, pause, resume."
+  ],
+  "outputs": {
+    "敲响战鼓": {
+      "normal": "../labeled/start-battle-normal.png",
+      "pressed": "../labeled/start-battle-pressed.png"
+    },
+    "重启远征": {
+      "normal": "../labeled/restart-normal.png",
+      "pressed": "../labeled/restart-pressed.png"
+    },
+    "凝住沙漏": {
+      "normal": "../labeled/pause-normal.png",
+      "pressed": "../labeled/pause-pressed.png"
+    },
+    "转动沙漏": {
+      "normal": "../labeled/resume-normal.png",
+      "pressed": "../labeled/resume-pressed.png"
+    }
+  }
+}

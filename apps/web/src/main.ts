@@ -13,6 +13,7 @@ import {
   type Rarity,
   type Stats,
 } from "../../../packages/core/src/index.ts";
+import { textSpriteAtlas, type DamageSpriteKind } from "./generated/text-sprites.ts";
 import "./style.css";
 
 const WIDTH = 1280;
@@ -27,11 +28,26 @@ const CELL = Math.round(BAG_GRID_SOURCE_CELL * BAG_SCALE);
 const BAG_H = 520;
 const BAG_W = Math.round(BAG_H * (BAG_SOURCE_W / BAG_SOURCE_H));
 const BAG_X = (WIDTH - BAG_W) / 2;
-const BAG_OPEN_Y = 226;
+const BAG_OPEN_Y = 244;
 const BAG_CLOSED_Y = 690;
-const REWARD_CARD_W = 400;
-const REWARD_CARD_H = 120;
+const REWARD_CARD_SOURCE_W = 720;
+const REWARD_CARD_SOURCE_H = 180;
+const REWARD_CARD_H = 96;
+const REWARD_CARD_W = Math.round(REWARD_CARD_H * (REWARD_CARD_SOURCE_W / REWARD_CARD_SOURCE_H));
+const REWARD_CARD_SCALE = REWARD_CARD_H / REWARD_CARD_SOURCE_H;
+const REWARD_ICON_SOURCE_CENTER = { x: 104, y: 90 };
+const REWARD_ICON_SOURCE_SIZE = 128;
 const REWARD_CARD_GAP = 18;
+const HERO_ANCHOR = { x: 218, y: 356 };
+const HERO_DAMAGE_POINT = { x: HERO_ANCHOR.x, y: HERO_ANCHOR.y + 72 };
+const ENEMY_AREA = {
+  slotX: 1040,
+  slotGapX: 94,
+  topY: 310,
+  laneGapY: 90,
+};
+const TOP_STAGE_PLAQUE = { x: WIDTH / 2 - 128, y: -44, w: 256, h: 144 };
+const TOP_EMBLEM_PLAQUE = { x: WIDTH - 174, y: -18, w: 128, h: 114 };
 
 const rarityLabel: Record<Rarity, string> = {
   common: "普通",
@@ -125,31 +141,47 @@ const actorAnimationStrips: Record<string, StripDef> = {
     anchorBottom: true,
   },
 };
-const backgroundSprite = "/assets/backgrounds/dungeon-workbench.png";
+const backgroundSprite = "/assets/backgrounds/dungeon-arena-clean-v1.png";
 const uiBase = "/assets/ui";
 const effectsBase = "/assets/effects";
 const uiSprites = {
   bagOpen: `${uiBase}/bag-open.png`,
   bagClosed: `${uiBase}/bag-closed.png`,
-  barPlayerFrame: `${uiBase}/bar-player-frame.png`,
-  barEnemyFrame: `${uiBase}/bar-enemy-frame.png`,
   barPlayerFill: `${uiBase}/bar-player-fill.png`,
   barEnemyFill: `${uiBase}/bar-enemy-fill.png`,
+  barPlayerBackLayer: `${uiBase}/layered/bar-player-back.png`,
+  barPlayerFrontLayer: `${uiBase}/layered/bar-player-front.png`,
+  barEnemyBackLayer: `${uiBase}/layered/bar-enemy-back.png`,
+  barEnemyFrontLayer: `${uiBase}/layered/bar-enemy-front.png`,
+  stagePlaque: `${uiBase}/hud/stage-sign-v3.png`,
+  emblemPlaque: `${uiBase}/hud/emblem-sign-v3.png`,
   debuffPoison: `${uiBase}/debuff-poison.png`,
   debuffBurn: `${uiBase}/debuff-burn.png`,
-  rewardCard: `${uiBase}/reward-card.png`,
-  tooltipParchment: `${uiBase}/tooltip-parchment.png`,
   panelItemTooltip: `${uiBase}/panel-item-tooltip.png`,
-  panelHeroStatus: `${uiBase}/panel-hero-status.png`,
   panelResult: `${uiBase}/panel-result.png`,
   buttonNormal: `${uiBase}/button-normal.png`,
   buttonPressed: `${uiBase}/button-pressed.png`,
   buttonDisabled: `${uiBase}/button-disabled.png`,
   smallSeal: `${uiBase}/small-seal.png`,
   inventorySlot: `${uiBase}/inventory-slot.png`,
-  frameCommon: `${uiBase}/frame-common.png`,
-  frameRare: `${uiBase}/frame-rare.png`,
-  battleLedger: `${uiBase}/battle-ledger.png`,
+};
+const labeledButtonSprites: Record<string, { normal: string; pressed: string }> = {
+  敲响战鼓: {
+    normal: `${uiBase}/labeled/start-battle-normal.png`,
+    pressed: `${uiBase}/labeled/start-battle-pressed.png`,
+  },
+  重启远征: {
+    normal: `${uiBase}/labeled/restart-normal.png`,
+    pressed: `${uiBase}/labeled/restart-pressed.png`,
+  },
+  凝住沙漏: {
+    normal: `${uiBase}/labeled/pause-normal.png`,
+    pressed: `${uiBase}/labeled/pause-pressed.png`,
+  },
+  转动沙漏: {
+    normal: `${uiBase}/labeled/resume-normal.png`,
+    pressed: `${uiBase}/labeled/resume-pressed.png`,
+  },
 };
 const rewardCardSprites: Record<Rarity, { normal: string; hover: string }> = {
   common: {
@@ -189,6 +221,107 @@ const effectStrips: Record<string, StripDef> = {
     frameHeight: 256,
   },
 };
+const textSpriteImages = Object.values(textSpriteAtlas.images);
+const skillDamageAtlasPath = "/assets/text/skill/damage-digits.png";
+const hudTextBase = "/assets/text/hud";
+const hudWaveTextSprites = Object.fromEntries(
+  Array.from({ length: 15 }, (_, index) => [
+    `hud.wave.${index}`,
+    { path: `${hudTextBase}/wave-w${index + 1}-v1.png`, referenceHeight: 34 },
+  ]),
+) as Record<string, { path: string; referenceHeight: number }>;
+const hudDigitTextSprites = Object.fromEntries(
+  Array.from("0123456789", (digit) => [
+    `hud.digit.${digit}`,
+    { path: `${hudTextBase}/digit-${digit}-v1.png`, referenceHeight: 34 },
+  ]),
+) as Record<string, { path: string; referenceHeight: number }>;
+const hudLetterTextSprites = Object.fromEntries(
+  Array.from("ABCDEFGHIJKLMNOPQRSTUVWXYZ", (letter) => [
+    `hud.letter.${letter}`,
+    { path: `${hudTextBase}/letter-${letter}-v1.png`, referenceHeight: 34 },
+  ]),
+) as Record<string, { path: string; referenceHeight: number }>;
+const skillTextSprites: Record<string, { path: string; referenceHeight: number }> = {
+  "ui.title": { path: "/assets/text/skill/ui-title.png", referenceHeight: 80 },
+  "button.startBattle": { path: "/assets/text/skill/button-start-battle.png", referenceHeight: 34 },
+  "button.restart": { path: "/assets/text/skill/button-restart.png", referenceHeight: 34 },
+  "button.pause": { path: "/assets/text/skill/button-pause.png", referenceHeight: 34 },
+  "button.resume": { path: "/assets/text/skill/button-resume.png", referenceHeight: 34 },
+  "ui.waveStart": { path: "/assets/text/skill/event-wave-start.png", referenceHeight: 48 },
+  "ui.waveClear": { path: "/assets/text/skill/event-wave-clear.png", referenceHeight: 48 },
+  "ui.kill": { path: "/assets/text/skill/event-kill.png", referenceHeight: 48 },
+  "ui.fusionComplete": {
+    path: "/assets/text/skill/event-fusion-complete.png",
+    referenceHeight: 46,
+  },
+  "ui.victoryResult": { path: "/assets/text/skill/result-victory.png", referenceHeight: 46 },
+  "ui.defeatResult": { path: "/assets/text/skill/result-defeat.png", referenceHeight: 46 },
+  "rarity.common": { path: "/assets/text/skill/rarity-common.png", referenceHeight: 30 },
+  "rarity.uncommon": { path: "/assets/text/skill/rarity-uncommon.png", referenceHeight: 30 },
+  "rarity.rare": { path: "/assets/text/skill/rarity-rare.png", referenceHeight: 30 },
+  "rarity.epic": { path: "/assets/text/skill/rarity-epic.png", referenceHeight: 30 },
+  "stat.maxHp": { path: "/assets/text/skill/stat-maxHp.png", referenceHeight: 30 },
+  "tag.weapon": { path: "/assets/text/skill/tag-weapon.png", referenceHeight: 30 },
+  "tag.shield": { path: "/assets/text/skill/tag-shield.png", referenceHeight: 30 },
+  "tag.trinket": { path: "/assets/text/skill/tag-trinket.png", referenceHeight: 30 },
+  "tag.alchemy": { path: "/assets/text/skill/tag-alchemy.png", referenceHeight: 30 },
+  "tag.fire": { path: "/assets/text/skill/tag-fire.png", referenceHeight: 30 },
+  "tag.poison": { path: "/assets/text/skill/tag-poison.png", referenceHeight: 30 },
+  "tag.metal": { path: "/assets/text/skill/tag-metal.png", referenceHeight: 30 },
+  "tag.machine": { path: "/assets/text/skill/tag-machine.png", referenceHeight: 30 },
+  "tag.nature": { path: "/assets/text/skill/tag-nature.png", referenceHeight: 30 },
+  "tag.curse": { path: "/assets/text/skill/tag-curse.png", referenceHeight: 30 },
+  "hud.stagePrefix": { path: `${hudTextBase}/stage-prefix-v1.png`, referenceHeight: 34 },
+  "hud.stageSuffix": { path: `${hudTextBase}/stage-suffix-v1.png`, referenceHeight: 34 },
+  "hud.seedLabel": { path: `${hudTextBase}/seed-label-v1.png`, referenceHeight: 30 },
+  "hud.hyphen": { path: `${hudTextBase}/hyphen-v1.png`, referenceHeight: 18 },
+  "hud.wave12.char.yu": { path: `${hudTextBase}/wave12-char-yu-v1.png`, referenceHeight: 34 },
+  "hud.wave12.char.jin": { path: `${hudTextBase}/wave12-char-jin-v1.png`, referenceHeight: 34 },
+  "hud.wave12.char.lie": { path: `${hudTextBase}/wave12-char-lie-v1.png`, referenceHeight: 34 },
+  "hud.wave12.char.feng": { path: `${hudTextBase}/wave12-char-feng-v1.png`, referenceHeight: 34 },
+  ...hudWaveTextSprites,
+  ...hudDigitTextSprites,
+  ...hudLetterTextSprites,
+};
+type TextSpriteAtlasName = keyof typeof textSpriteAtlas.images;
+interface TextSpriteRegion {
+  atlas: TextSpriteAtlasName;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  text?: string;
+}
+
+interface DamageGlyphRegion {
+  atlas: TextSpriteAtlasName;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  advance: number;
+}
+
+interface TextSpriteDrawOptions {
+  align?: CanvasTextAlign;
+  scale?: number;
+  maxWidth?: number;
+  alpha?: number;
+}
+
+interface TextSpriteDrawResult {
+  w: number;
+  h: number;
+  scale: number;
+}
+
+const fixedTextSprites = textSpriteAtlas.sprites as Record<string, TextSpriteRegion>;
+const textSpriteLookups = textSpriteAtlas.lookups as Record<string, Record<string, string>>;
+const damageGlyphs = textSpriteAtlas.damage.glyphs as Record<
+  DamageSpriteKind,
+  Record<string, DamageGlyphRegion>
+>;
 const spriteCache = new Map<string, HTMLImageElement>();
 const actorSpriteSurfaceCache = new Map<string, HTMLCanvasElement>();
 const actorStripFrameSurfaceCache = new Map<string, HTMLCanvasElement>();
@@ -216,33 +349,19 @@ const stripBoundsCache = new Map<string, StripBoundsCacheEntry>();
 let backgroundLayerCache: HTMLCanvasElement | null = null;
 const barThemes: Record<BarThemeName, BarTheme> = {
   player: {
-    framePath: uiSprites.barPlayerFrame,
+    backPath: uiSprites.barPlayerBackLayer,
+    frontPath: uiSprites.barPlayerFrontLayer,
     fillPath: uiSprites.barPlayerFill,
-    frameCropHeight: 266,
-    frameLeftCap: 184,
-    frameCenterX: 250,
-    frameCenterWidth: 92,
-    frameRightCapX: 412,
-    fillLeft: 80,
-    fillTop: 119,
-    fillWidth: 438,
-    fillHeight: 86,
+    fillInset: { left: 0.084, right: 0.084, top: 0.45, bottom: 0.31 },
     troughColor: "rgba(12, 17, 12, 0.88)",
     sparkColor: "#d0ff8e",
     glossColor: "rgba(255, 255, 255, 0.58)",
   },
   enemy: {
-    framePath: uiSprites.barEnemyFrame,
+    backPath: uiSprites.barEnemyBackLayer,
+    frontPath: uiSprites.barEnemyFrontLayer,
     fillPath: uiSprites.barEnemyFill,
-    frameCropHeight: 270,
-    frameLeftCap: 188,
-    frameCenterX: 254,
-    frameCenterWidth: 96,
-    frameRightCapX: 420,
-    fillLeft: 81,
-    fillTop: 120,
-    fillWidth: 443,
-    fillHeight: 84,
+    fillInset: { left: 0.08, right: 0.084, top: 0.43, bottom: 0.31 },
     troughColor: "rgba(18, 10, 10, 0.9)",
     sparkColor: "#ffb178",
     glossColor: "rgba(255, 244, 220, 0.46)",
@@ -280,6 +399,12 @@ interface FloatingText {
   outline: string;
   startedAt: number;
   durationMs: number;
+  spriteKey?: string;
+  damage?: {
+    value: string;
+    kind: DamageSpriteKind;
+    critical: boolean;
+  };
 }
 
 interface EnemyHitEffect {
@@ -341,17 +466,15 @@ interface EnemyBurnState {
 type BarThemeName = "player" | "enemy";
 
 interface BarTheme {
-  framePath: string;
+  backPath: string;
+  frontPath: string;
   fillPath: string;
-  frameCropHeight: number;
-  frameLeftCap: number;
-  frameCenterX: number;
-  frameCenterWidth: number;
-  frameRightCapX: number;
-  fillLeft: number;
-  fillTop: number;
-  fillWidth: number;
-  fillHeight: number;
+  fillInset: {
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+  };
   troughColor: string;
   sparkColor: string;
   glossColor: string;
@@ -360,16 +483,6 @@ interface BarTheme {
 interface BarStatusVisuals {
   poison?: EnemyPoisonState | null;
   burn?: EnemyBurnState | null;
-}
-
-interface BarFrameLayout {
-  leftCapW: number;
-  centerW: number;
-  rightCapW: number;
-  railW: number;
-  centerX: number;
-  rightRailX: number;
-  rightCapX: number;
 }
 
 const canvas = document.querySelector<HTMLCanvasElement>("#game");
@@ -561,9 +674,13 @@ function drawBackground(): void {
 }
 
 function drawHeader(): void {
-  text("背包构筑自动战斗", 54, 30, 29, "#f3d18a", "left", '"Songti SC", Georgia, serif');
-  drawSmallSeal(WIDTH / 2 - 128, 28, 256, `第 ${snapshot.waveIndex + 1} 波 · ${snapshot.waveName}`);
-  drawSmallSeal(WIDTH - 248, 28, 190, `纹章 ${snapshot.shareCode}`);
+  drawStagePlaque(TOP_STAGE_PLAQUE.x, TOP_STAGE_PLAQUE.y, TOP_STAGE_PLAQUE.w, TOP_STAGE_PLAQUE.h);
+  drawEmblemPlaque(
+    TOP_EMBLEM_PLAQUE.x,
+    TOP_EMBLEM_PLAQUE.y,
+    TOP_EMBLEM_PLAQUE.w,
+    TOP_EMBLEM_PLAQUE.h,
+  );
 }
 
 function drawBackpack(hoveredItem: ItemSnapshot | null): void {
@@ -572,7 +689,9 @@ function drawBackpack(hoveredItem: ItemSnapshot | null): void {
   drawBackpackBody(BAG_X, bagY, BAG_W, BAG_H, open);
 
   if (!open) {
-    text("行囊已收起", BAG_X + BAG_W / 2, bagY + 22, 15, "#d6c5a1", "center");
+    if (!drawTextSprite("ui.bagClosed", BAG_X + BAG_W / 2, bagY + 18, { align: "center" })) {
+      text("行囊已收起", BAG_X + BAG_W / 2, bagY + 22, 15, "#d6c5a1", "center");
+    }
     drawClosedBagItemPulses(bagY);
     return;
   }
@@ -607,17 +726,13 @@ function drawBackpack(hoveredItem: ItemSnapshot | null): void {
       roundRect(px + 4, py + 4, CELL - 16, CELL - 16, 10, true);
       ctx.restore();
     }
-    if (!drawSprite(itemSprites[item.def.id], px + 4, py + 4, CELL - 14, CELL - 14, 5)) {
+    if (!drawCenteredSprite(itemSprites[item.def.id], px + 4, py + 4, CELL - 14, CELL - 14, 5, 2)) {
       text(item.def.symbol, px + 27, py + 16, 18, "#fff7d6", "center", "monospace");
     }
-    ctx.fillStyle = "rgba(16, 10, 7, 0.78)";
-    roundRect(px + 4, py + CELL - 21, CELL - 16, 12, 4, true);
-    text(item.def.name.slice(0, 3), px + CELL / 2 - 2, py + CELL - 21, 10, "#ffe6aa", "center");
   }
 
   drawFusionCellCues();
   drawFusionNotice();
-  drawPlayerStatusPanel(42, 432, 330, 250);
 }
 
 function drawFusionHints(): void {
@@ -672,7 +787,9 @@ function drawFusionCellCue(x: number, y: number, alpha: number): void {
   roundRect(px + 1, py + 1, CELL - 6, CELL - 6, 7, false);
   ctx.fillStyle = `rgba(13, 24, 19, ${0.72 + alpha * 0.12})`;
   roundRect(px + CELL - 23, py + 5, 17, 17, 5, true);
-  text("合", px + CELL - 14, py + 6, 12, "#dfffe7", "center", '"Songti SC", Georgia, serif');
+  if (!drawTextSprite("ui.fusionMark", px + CELL - 14, py + 4, { align: "center", scale: 0.56 })) {
+    text("合", px + CELL - 14, py + 6, 12, "#dfffe7", "center", '"Songti SC", Georgia, serif');
+  }
 }
 
 function drawFusionNotice(): void {
@@ -726,11 +843,10 @@ function drawRewardChoices(): void {
     return;
   }
 
-  const y = BAG_OPEN_Y - 132;
+  const y = BAG_OPEN_Y - 114;
   const totalW =
     REWARD_CARD_W * snapshot.rewards.length + REWARD_CARD_GAP * (snapshot.rewards.length - 1);
   let x = (WIDTH - totalW) / 2;
-  text("选择一件战利品", WIDTH / 2, y - 34, 22, "#f3d18a", "center", '"Songti SC", Georgia, serif');
   for (const reward of snapshot.rewards) {
     rewardCard(x, y, reward);
     x += REWARD_CARD_W + REWARD_CARD_GAP;
@@ -739,12 +855,9 @@ function drawRewardChoices(): void {
 
 function drawArena(): void {
   drawSceneGround();
-  drawPlayer(210, 360);
+  drawPlayer(HERO_ANCHOR.x, HERO_ANCHOR.y);
   drawEnemies();
   drawBattleBanner();
-  if (snapshot.phase !== "draft") {
-    text(phaseLabel(), WIDTH / 2, 78, 16, "#d6c5a1", "center");
-  }
 }
 
 function drawBattleBanner(): void {
@@ -755,7 +868,9 @@ function drawBattleBanner(): void {
   ctx.save();
   ctx.globalAlpha = alpha;
   drawNinePatch(uiSprites.smallSeal, WIDTH / 2 - 78, 102, 156, 40, 28);
-  text("战鼓已响", WIDTH / 2, 112, 18, "#f3d18a", "center");
+  if (!drawTextSprite("ui.battleStarted", WIDTH / 2, 108, { align: "center", scale: 0.9 })) {
+    text("战鼓已响", WIDTH / 2, 112, 18, "#f3d18a", "center");
+  }
   ctx.restore();
 }
 
@@ -779,14 +894,14 @@ function drawPlayer(x: number, y: number): void {
       text("HERO", position.x, position.y - 9, 13, "#f7fbff", "center");
     }
   }
-  const playerBarW = 190;
+  const playerBarW = 224;
   const barX = position.x - playerBarW / 2;
   const barY = position.y + 79;
   drawHealthBar(
     barX,
     barY,
     playerBarW,
-    40,
+    38,
     snapshot.player.hp / snapshot.player.maxHp,
     "player",
     now,
@@ -794,7 +909,7 @@ function drawPlayer(x: number, y: number): void {
   text(
     `${Math.ceil(snapshot.player.hp)} / ${Math.ceil(snapshot.player.maxHp)}`,
     position.x,
-    barY + 18,
+    barY + 17,
     13,
     "#f5edd2",
     "center",
@@ -806,8 +921,6 @@ function drawEnemies(): void {
   const now = performance.now();
   const laneCounts = [0, 0, 0];
   if (snapshot.enemies.length === 0) {
-    drawActorShadow(1010, 448, 170, 34);
-    text("矿坑深处", 1010, 354, 16, "#7d8f8d", "center");
     return;
   }
 
@@ -815,8 +928,8 @@ function drawEnemies(): void {
     const laneIndex = Math.max(0, Math.min(2, enemy.instance.lane));
     const order = laneCounts[laneIndex] ?? 0;
     laneCounts[laneIndex] = order + 1;
-    const x = 925 + order * 100;
-    const y = 270 + laneIndex * 118;
+    const x = ENEMY_AREA.slotX + order * ENEMY_AREA.slotGapX;
+    const y = ENEMY_AREA.topY + laneIndex * ENEMY_AREA.laneGapY;
     const spriteId = enemy.def.spriteId ?? enemy.def.id;
     const size = spriteId === "boss" ? 158 : 116;
     const hit = enemyHitEffects.get(enemy.instance.id);
@@ -837,10 +950,15 @@ function drawEnemies(): void {
     if (burnState && burnState.activeUntil > now) {
       drawEnemyBurnMotes(x, groundY - size * 0.38, size, burnState, now);
     }
-    const enemyBarW = spriteId === "boss" ? 212 : 176;
-    const enemyBarH = spriteId === "boss" ? 38 : 32;
+    const enemyBarW = spriteId === "boss" ? 224 : 190;
+    const enemyBarH = spriteId === "boss" ? 34 : 28;
     const barX = x - enemyBarW / 2;
     const barY = groundY + 2;
+    drawLookupText("enemy", enemy.def.name, x, barY - 18, {
+      align: "center",
+      scale: spriteId === "boss" ? 0.78 : 0.7,
+      maxWidth: enemyBarW - 18,
+    });
     drawHealthBar(
       barX,
       barY,
@@ -858,9 +976,11 @@ function drawEnemies(): void {
 }
 
 function drawSidePanel(): void {
+  const primaryX = BAG_X + BAG_W / 2 + 42;
+  const secondaryX = BAG_X + BAG_W / 2 - 210;
   if (snapshot.phase === "draft") {
     const y = backpackVisualY + BAG_H - 74;
-    button(BAG_X + BAG_W - 206, y, 170, 42, "敲响战鼓", () => {
+    button(primaryX, y, 170, 42, "敲响战鼓", () => {
       const phaseBefore = state.phase;
       state = dispatchCommand(state, { type: "startBattle" });
       if (phaseBefore === "draft" && state.phase === "battle") {
@@ -868,10 +988,10 @@ function drawSidePanel(): void {
         battleBannerUntilMs = performance.now() + 850;
       }
     });
-    button(BAG_X + 36, y + 2, 142, 38, "重启远征", restartRun);
+    button(secondaryX, y + 2, 142, 38, "重启远征", restartRun);
   } else if (snapshot.phase === "battle") {
     button(
-      BAG_X + BAG_W - 206,
+      BAG_X + BAG_W / 2 - 85,
       backpackVisualY + 18,
       170,
       38,
@@ -881,16 +1001,12 @@ function drawSidePanel(): void {
       },
     );
   } else {
-    button(BAG_X + BAG_W - 206, backpackVisualY + 18, 170, 38, "重启远征", restartRun);
+    button(BAG_X + BAG_W / 2 - 85, backpackVisualY + 18, 170, 38, "重启远征", restartRun);
   }
 
   if (snapshot.phase === "victory" || snapshot.phase === "defeat") {
     drawResultCard();
     return;
-  }
-
-  if (snapshot.phase === "battle") {
-    drawBattleLedger();
   }
 }
 
@@ -954,6 +1070,7 @@ function handleCombatEvent(event: GameSnapshot["combatEvents"][number], now: num
         outline: "rgba(34, 17, 8, 0.85)",
         startedAt: now,
         durationMs: 780,
+        spriteKey: "ui.waveStart",
       });
       return;
 
@@ -969,6 +1086,7 @@ function handleCombatEvent(event: GameSnapshot["combatEvents"][number], now: num
         outline: "rgba(18, 32, 23, 0.9)",
         startedAt: now,
         durationMs: 980,
+        spriteKey: "ui.waveClear",
       });
       return;
 
@@ -992,11 +1110,11 @@ function handleCombatEvent(event: GameSnapshot["combatEvents"][number], now: num
 
     case "enemyAttack": {
       const point = enemyPoint(event.enemyLane, event.enemySlot);
-      addStrike(point, { x: 210, y: 452 }, "#ff7474", now, false, event.id);
+      addStrike(point, HERO_DAMAGE_POINT, "#ff7474", now, false, event.id);
       addFloatingText({
         id: event.id,
-        x: 210 + jitter(event.id, 20),
-        y: 430,
+        x: HERO_DAMAGE_POINT.x + jitter(event.id, 20),
+        y: HERO_DAMAGE_POINT.y - 22,
         dx: 0,
         value: `-${formatDamage(event.amount)}`,
         color: "#ff8b7a",
@@ -1004,6 +1122,11 @@ function handleCombatEvent(event: GameSnapshot["combatEvents"][number], now: num
         outline: "rgba(24, 6, 4, 0.9)",
         startedAt: now,
         durationMs: 720,
+        damage: {
+          value: `-${formatDamage(event.amount)}`,
+          kind: "enemy",
+          critical: false,
+        },
       });
       bumpScreenShake(now, 4, 140);
       return;
@@ -1035,6 +1158,7 @@ function handleCombatEvent(event: GameSnapshot["combatEvents"][number], now: num
         outline: "rgba(24, 13, 4, 0.92)",
         startedAt: now,
         durationMs: 900,
+        spriteKey: "ui.kill",
       });
       return;
     }
@@ -1066,6 +1190,7 @@ function handleCombatEvent(event: GameSnapshot["combatEvents"][number], now: num
         outline: "rgba(7, 20, 15, 0.92)",
         startedAt: now,
         durationMs: 960,
+        spriteKey: "ui.fusionComplete",
       });
       return;
   }
@@ -1130,6 +1255,11 @@ function emitDamageVisuals(event: DamageCombatEvent, point: Point, startedAt: nu
     outline: "rgba(6, 7, 6, 0.9)",
     startedAt,
     durationMs: event.critical ? 850 : 720,
+    damage: {
+      value: formatDamage(event.amount),
+      kind: damageTextKind(event.kind, event.critical),
+      critical: event.critical,
+    },
   });
   if (event.kind === "thorns") {
     addArenaSpriteEffect({
@@ -1236,6 +1366,18 @@ function drawFloatingTexts(now: number): void {
     const x = float.x + float.dx * progress;
     const y = float.y - 46 * easeOutCubic(progress);
     ctx.globalAlpha = alpha;
+    if (float.damage && drawFloatingDamage(float.damage, x, y)) {
+      continue;
+    }
+    if (
+      float.spriteKey &&
+      drawTextSprite(float.spriteKey, x, y, {
+        align: "center",
+        scale: Math.max(0.72, Math.min(1.04, float.size / 24)),
+      })
+    ) {
+      continue;
+    }
     text(float.value, x, y, float.size, float.color, "center", undefined, float.outline);
   }
   ctx.restore();
@@ -1273,7 +1415,7 @@ function drawClosedBagItemPulses(bagY: number): void {
     ctx.save();
     ctx.globalAlpha = 0.66 + alpha * 0.34;
     drawItemPulse(x - 3, y - 3, iconSize + 6, alpha);
-    drawSprite(itemSprites[item.def.id], x, y, iconSize, iconSize, 4);
+    drawCenteredSprite(itemSprites[item.def.id], x, y, iconSize, iconSize, 4, 2);
     ctx.restore();
     x += iconSize + gap;
   }
@@ -1439,8 +1581,8 @@ function itemPulseAlpha(instanceId: string, now: number): number {
 
 function enemyPoint(lane: number, slot: number): Point {
   return {
-    x: 925 + Math.max(0, slot) * 100,
-    y: 270 + Math.max(0, Math.min(2, lane)) * 118,
+    x: ENEMY_AREA.slotX + Math.max(0, slot) * ENEMY_AREA.slotGapX,
+    y: ENEMY_AREA.topY + Math.max(0, Math.min(2, lane)) * ENEMY_AREA.laneGapY,
   };
 }
 
@@ -1491,36 +1633,6 @@ function removeExpired<T>(items: T[], keep: (item: T) => boolean): void {
   items.length = writeIndex;
 }
 
-function drawBattleLedger(): void {
-  const x = 76;
-  const y = 112;
-  text("战绩", x, y, 18, "#f3d18a", "left", '"Songti SC", Georgia, serif');
-  text(`击杀 ${snapshot.totals.kills}`, x, y + 30, 14, "#d6c5a1");
-  text(`伤害 ${Math.round(snapshot.totals.damageDone)}`, x, y + 52, 14, "#d6c5a1");
-  let cursorY = y + 82;
-  const queuedFusions = snapshot.fusionPreviews.filter((preview) => preview.queued);
-  if (queuedFusions.length > 0) {
-    text("战后合成", x, cursorY, 14, "#74f5c3");
-    cursorY += 21;
-    cursorY += wrapText(fusionPreviewSummary(queuedFusions), x, cursorY, 230, 17, 12, "#d6c5a1");
-    cursorY += 8;
-  }
-  for (const lineText of snapshot.log.slice(-2)) {
-    cursorY += wrapText(lineText, x, cursorY, 230, 18, 12, "#aeb8ad");
-  }
-}
-
-function fusionPreviewSummary(previews: GameSnapshot["fusionPreviews"]): string {
-  const labels = previews.map((preview) => {
-    const ingredients = preview.ingredients.map((ingredient) => ingredient.def.name).join(" + ");
-    return `${ingredients} -> ${preview.result.name}`;
-  });
-  if (labels.length <= 2) {
-    return labels.join("；");
-  }
-  return `${labels.slice(0, 2).join("；")} 等 ${labels.length} 组`;
-}
-
 function rewardCard(x: number, y: number, item: ItemDef): void {
   const hovered =
     pointer.x >= x &&
@@ -1529,18 +1641,32 @@ function rewardCard(x: number, y: number, item: ItemDef): void {
     pointer.y <= y + REWARD_CARD_H;
   const cardSprite = rewardCardSprites[item.rarity];
   drawSprite(hovered ? cardSprite.hover : cardSprite.normal, x, y, REWARD_CARD_W, REWARD_CARD_H, 0);
-  drawSprite(itemSprites[item.id], x + 25, y + 27, 66, 66, 5);
-  const textX = x + 140;
-  const textY = y + 34;
-  const textW = 178;
+  const iconSize = REWARD_ICON_SOURCE_SIZE * REWARD_CARD_SCALE;
+  const iconX = x + REWARD_ICON_SOURCE_CENTER.x * REWARD_CARD_SCALE - iconSize / 2;
+  const iconY = y + REWARD_ICON_SOURCE_CENTER.y * REWARD_CARD_SCALE - iconSize / 2;
+  drawCenteredSprite(itemSprites[item.id], iconX, iconY, iconSize, iconSize, 5, 5);
+  const textX = x + 106;
+  const textY = y + 25;
+  const textW = REWARD_CARD_W - 146;
   ctx.save();
   ctx.beginPath();
-  ctx.rect(textX, textY, textW, 58);
+  ctx.rect(textX - 12, textY - 13, textW + 24, 78);
   ctx.clip();
-  fittedText(item.name, textX, textY, textW, 16, "#fff2c4");
-  text(rarityLabel[item.rarity], textX, textY + 23, 10, "#9cb4bd");
-  fittedText(rewardPrimaryStat(item), textX + 38, textY + 21, textW - 38, 13, "#f3d18a");
-  fittedText(shortRewardEffectSummary(item), textX, textY + 42, textW, 12, "#d6e2c4");
+  if (
+    !drawLookupText("item", item.name, textX - 7, textY - 8, { maxWidth: textW + 14, scale: 0.66 })
+  ) {
+    fittedText(item.name, textX, textY, textW, 16, "#fff2c4");
+  }
+  if (
+    !drawLookupText("rarity", rarityLabel[item.rarity], textX - 5, textY + 18, {
+      scale: 0.64,
+      maxWidth: 36,
+    })
+  ) {
+    text(rarityLabel[item.rarity], textX, textY + 23, 10, "#9cb4bd");
+  }
+  fittedText(rewardPrimaryStat(item), textX + 35, textY + 21, textW - 35, 12, "#f3d18a");
+  fittedText(shortRewardEffectSummary(item), textX, textY + 42, textW, 11, "#d6e2c4");
   ctx.restore();
   hitZones.push({
     x,
@@ -1573,16 +1699,23 @@ function drawResultCard(): void {
   const isVictory = snapshot.phase === "victory";
 
   drawPanelBackground(uiSprites.panelResult, x, y, w, h);
-  text(
-    isVictory ? "胜利结算" : "失败结算",
-    x + w / 2,
-    y + 46,
-    22,
-    isVictory ? "#ffe7a7" : "#ffc2a0",
-    "center",
-    '"Songti SC", Georgia, serif',
-    "rgba(28, 12, 4, 0.9)",
-  );
+  if (
+    !drawTextSprite(isVictory ? "ui.victoryResult" : "ui.defeatResult", x + w / 2, y + 34, {
+      align: "center",
+      scale: 0.86,
+    })
+  ) {
+    text(
+      isVictory ? "胜利结算" : "失败结算",
+      x + w / 2,
+      y + 46,
+      22,
+      isVictory ? "#ffe7a7" : "#ffc2a0",
+      "center",
+      '"Songti SC", Georgia, serif',
+      "rgba(28, 12, 4, 0.9)",
+    );
+  }
 
   const reason = snapshot.endReason ?? (isVictory ? "远征完成" : "远征中止");
   wrapText(reason, x + inset, y + 82, contentW, 20, 14, "#e4d1ad", "rgba(8, 6, 5, 0.86)");
@@ -1635,27 +1768,36 @@ function drawItemTooltip(item: ItemSnapshot): void {
 
   drawPanelBackground(uiSprites.panelItemTooltip, x, y, w, h);
 
-  drawSprite(itemSprites[item.def.id], x + innerX, y + 42, 68, 68, 6);
-  text(
-    item.def.name,
-    x + innerX + 78,
-    y + 48,
-    20,
-    "#ffe6aa",
-    "left",
-    '"Songti SC", Georgia, serif',
-    "rgba(12, 7, 4, 0.9)",
-  );
-  text(
-    `${rarityLabel[item.def.rarity]} | ${item.def.tags.map(formatTag).join(" / ")}`,
-    x + innerX + 78,
-    y + 78,
-    13,
-    "#b9c8b5",
-    "left",
-    undefined,
-    "rgba(12, 7, 4, 0.9)",
-  );
+  drawCenteredSprite(itemSprites[item.def.id], x + innerX, y + 42, 68, 68, 6, 4);
+  if (
+    !drawLookupText("item", item.def.name, x + innerX + 70, y + 39, {
+      scale: 0.86,
+      maxWidth: innerW - 80,
+    })
+  ) {
+    text(
+      item.def.name,
+      x + innerX + 78,
+      y + 48,
+      20,
+      "#ffe6aa",
+      "left",
+      '"Songti SC", Georgia, serif',
+      "rgba(12, 7, 4, 0.9)",
+    );
+  }
+  if (!drawItemMetaSprites(item.def, x + innerX + 74, y + 72, innerW - 84)) {
+    text(
+      `${rarityLabel[item.def.rarity]} | ${item.def.tags.map(formatTag).join(" / ")}`,
+      x + innerX + 78,
+      y + 78,
+      13,
+      "#b9c8b5",
+      "left",
+      undefined,
+      "rgba(12, 7, 4, 0.9)",
+    );
+  }
   const descriptionHeight = wrapText(
     item.def.description,
     x + innerX,
@@ -1670,7 +1812,9 @@ function drawItemTooltip(item: ItemSnapshot): void {
   let cursorY = y + 116 + descriptionHeight + 14;
   drawDivider(x + innerX, cursorY, innerW);
   cursorY += 12;
-  text("当前贡献", x + innerX, cursorY, 14, "#f3d18a", "left", undefined, "rgba(12, 7, 4, 0.86)");
+  if (!drawTextSprite("ui.currentContribution", x + innerX - 6, cursorY - 5, { scale: 0.68 })) {
+    text("当前贡献", x + innerX, cursorY, 14, "#f3d18a", "left", undefined, "rgba(12, 7, 4, 0.86)");
+  }
   cursorY += 23;
   for (let index = 0; index < statEntries.length; index += 1) {
     const column = index % 2;
@@ -1686,19 +1830,23 @@ function drawItemTooltip(item: ItemSnapshot): void {
   cursorY += Math.max(1, statRows) * 30 + 4;
   drawDivider(x + innerX, cursorY, innerW);
   cursorY += 12;
-  text("连携状态", x + innerX, cursorY, 14, "#f3d18a", "left", undefined, "rgba(12, 7, 4, 0.86)");
+  if (!drawTextSprite("ui.synergyStatus", x + innerX - 6, cursorY - 5, { scale: 0.68 })) {
+    text("连携状态", x + innerX, cursorY, 14, "#f3d18a", "left", undefined, "rgba(12, 7, 4, 0.86)");
+  }
   cursorY += 22;
   if (effectRows.length === 0) {
-    text(
-      "无连携效果",
-      x + innerX,
-      cursorY,
-      13,
-      "#b9c8b5",
-      "left",
-      undefined,
-      "rgba(12, 7, 4, 0.86)",
-    );
+    if (!drawTextSprite("ui.noSynergy", x + innerX - 5, cursorY - 5, { scale: 0.66 })) {
+      text(
+        "无连携效果",
+        x + innerX,
+        cursorY,
+        13,
+        "#b9c8b5",
+        "left",
+        undefined,
+        "rgba(12, 7, 4, 0.86)",
+      );
+    }
     return;
   }
   for (const row of effectRows) {
@@ -1808,7 +1956,15 @@ function drawGhost(): void {
   }
   ctx.globalAlpha = 0.78;
   if (
-    !drawSprite(itemSprites[item.def.id], pointer.x - 27, pointer.y - 27, CELL - 18, CELL - 18, 6)
+    !drawCenteredSprite(
+      itemSprites[item.def.id],
+      pointer.x - 27,
+      pointer.y - 27,
+      CELL - 18,
+      CELL - 18,
+      6,
+      2,
+    )
   ) {
     text(item.def.symbol, pointer.x, pointer.y - 7, 24, "#fff7d6", "center", "monospace");
   }
@@ -1826,22 +1982,60 @@ function button(
 ): void {
   const hovered =
     enabled && pointer.x >= x && pointer.x <= x + w && pointer.y >= y && pointer.y <= y + h;
-  drawNinePatch(
-    enabled
-      ? hovered
-        ? uiSprites.buttonPressed
-        : uiSprites.buttonNormal
-      : uiSprites.buttonDisabled,
-    x,
-    y,
-    w,
-    h,
-    46,
-  );
-  text(label, x + w / 2, y + h / 2 - 7, 14, enabled ? "#ffe6aa" : "#7d9199", "center");
+  if (!enabled || !drawLabeledButton(label, x, y, w, h, hovered)) {
+    drawNinePatch(
+      enabled
+        ? hovered
+          ? uiSprites.buttonPressed
+          : uiSprites.buttonNormal
+        : uiSprites.buttonDisabled,
+      x,
+      y,
+      w,
+      h,
+      46,
+    );
+    const buttonKey = textSpriteLookups.ui?.[label];
+    ctx.save();
+    if (!enabled) {
+      ctx.globalAlpha = 0.54;
+    }
+    const drewLabel = buttonKey
+      ? drawTextSprite(buttonKey, x + w / 2, y + h / 2 - 15, {
+          align: "center",
+          scale: 0.74,
+          maxWidth: w - 34,
+        })
+      : null;
+    ctx.restore();
+    if (!drewLabel) {
+      text(label, x + w / 2, y + h / 2 - 7, 14, enabled ? "#ffe6aa" : "#7d9199", "center");
+    }
+  }
   if (enabled) {
     hitZones.push({ x, y, w, h, onClick });
   }
+}
+
+function drawLabeledButton(
+  label: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  pressed: boolean,
+): boolean {
+  const sprite = labeledButtonSprites[label];
+  if (!sprite) {
+    return false;
+  }
+  const path = pressed ? sprite.pressed : sprite.normal;
+  const image = spriteCache.get(path);
+  if (!image?.complete || image.naturalWidth === 0) {
+    return false;
+  }
+  ctx.drawImage(image, x, y, w, h);
+  return true;
 }
 
 function drawFallbackBar(
@@ -1861,6 +2055,291 @@ function drawFallbackBar(
   roundRect(x, y, w, h, h / 2, false);
 }
 
+function drawTextSprite(
+  key: string | undefined,
+  x: number,
+  y: number,
+  options: TextSpriteDrawOptions = {},
+): TextSpriteDrawResult | null {
+  if (!key) {
+    return null;
+  }
+  const skillSprite = skillTextSprites[key];
+  if (skillSprite) {
+    const result = drawStandaloneTextSprite(skillSprite, x, y, options);
+    if (result) {
+      return result;
+    }
+  }
+  const sprite = fixedTextSprites[key];
+  if (!sprite) {
+    return null;
+  }
+  const imagePath = textSpriteAtlas.images[sprite.atlas];
+  const image = spriteCache.get(imagePath);
+  if (!image?.complete || image.naturalWidth === 0) {
+    return null;
+  }
+
+  let scale = options.scale ?? 1;
+  if (options.maxWidth && sprite.w * scale > options.maxWidth) {
+    scale = Math.max(0.1, options.maxWidth / sprite.w);
+  }
+  const drawW = sprite.w * scale;
+  const drawH = sprite.h * scale;
+  let drawX = x;
+  if (options.align === "center") {
+    drawX -= drawW / 2;
+  } else if (options.align === "right" || options.align === "end") {
+    drawX -= drawW;
+  }
+
+  ctx.save();
+  ctx.globalAlpha *= options.alpha ?? 1;
+  ctx.drawImage(image, sprite.x, sprite.y, sprite.w, sprite.h, drawX, y, drawW, drawH);
+  ctx.restore();
+  return { w: drawW, h: drawH, scale };
+}
+
+function drawStandaloneTextSprite(
+  sprite: { path: string; referenceHeight: number },
+  x: number,
+  y: number,
+  options: TextSpriteDrawOptions,
+): TextSpriteDrawResult | null {
+  const image = spriteCache.get(sprite.path);
+  if (!image?.complete || image.naturalWidth === 0) {
+    return null;
+  }
+
+  let scale = ((options.scale ?? 1) * sprite.referenceHeight) / image.naturalHeight;
+  if (options.maxWidth && image.naturalWidth * scale > options.maxWidth) {
+    scale = Math.max(0.1, options.maxWidth / image.naturalWidth);
+  }
+  const drawW = image.naturalWidth * scale;
+  const drawH = image.naturalHeight * scale;
+  let drawX = x;
+  if (options.align === "center") {
+    drawX -= drawW / 2;
+  } else if (options.align === "right" || options.align === "end") {
+    drawX -= drawW;
+  }
+
+  ctx.save();
+  ctx.globalAlpha *= options.alpha ?? 1;
+  ctx.drawImage(image, drawX, y, drawW, drawH);
+  ctx.restore();
+  return { w: drawW, h: drawH, scale };
+}
+
+function measureTextSprite(key: string | undefined, scale = 1): TextSpriteDrawResult | null {
+  if (!key) {
+    return null;
+  }
+  const skillSprite = skillTextSprites[key];
+  if (skillSprite) {
+    const image = spriteCache.get(skillSprite.path);
+    if (image?.complete && image.naturalWidth > 0) {
+      const actualScale = (scale * skillSprite.referenceHeight) / image.naturalHeight;
+      return { w: image.naturalWidth * actualScale, h: image.naturalHeight * actualScale, scale };
+    }
+  }
+  const sprite = fixedTextSprites[key];
+  if (!sprite) {
+    return null;
+  }
+  return { w: sprite.w * scale, h: sprite.h * scale, scale };
+}
+
+function lookupTextSpriteKey(group: string, value: string): string | undefined {
+  return textSpriteLookups[group]?.[value];
+}
+
+function drawLookupText(
+  group: string,
+  value: string,
+  x: number,
+  y: number,
+  options: TextSpriteDrawOptions = {},
+): TextSpriteDrawResult | null {
+  return drawTextSprite(lookupTextSpriteKey(group, value), x, y, options);
+}
+
+function drawTextSpriteSequence(
+  keys: string[],
+  x: number,
+  y: number,
+  options: TextSpriteDrawOptions = {},
+  gap = 2,
+): TextSpriteDrawResult | null {
+  if (keys.length === 0) {
+    return null;
+  }
+
+  let scale = options.scale ?? 1;
+  const measure = () => {
+    const parts = keys.map((key) => measureTextSprite(key, scale));
+    if (parts.some((part) => !part)) {
+      return null;
+    }
+    const measured = parts as TextSpriteDrawResult[];
+    const gapW = Math.max(-8, gap * scale);
+    const width = measured.reduce((sum, part) => sum + part.w, 0) + gapW * (keys.length - 1);
+    const height = measured.reduce((max, part) => Math.max(max, part.h), 0);
+    return { measured, width, height, gapW };
+  };
+
+  let layout = measure();
+  if (!layout) {
+    return null;
+  }
+  if (options.maxWidth && layout.width > options.maxWidth) {
+    scale *= options.maxWidth / layout.width;
+    layout = measure();
+    if (!layout) {
+      return null;
+    }
+  }
+
+  let cursorX = x;
+  if (options.align === "center") {
+    cursorX -= layout.width / 2;
+  } else if (options.align === "right" || options.align === "end") {
+    cursorX -= layout.width;
+  }
+
+  keys.forEach((key, index) => {
+    const part = layout?.measured[index];
+    if (!part) {
+      return;
+    }
+    drawTextSprite(key, cursorX, y + (layout.height - part.h) / 2, {
+      scale,
+      alpha: options.alpha,
+    });
+    cursorX += part.w + (layout?.gapW ?? 0);
+  });
+
+  return { w: layout.width, h: layout.height, scale };
+}
+
+function hudDigitKeys(value: number): string[] {
+  return Array.from(String(value), (digit) => `hud.digit.${digit}`);
+}
+
+function hudShareCodeKeys(value: string): string[] {
+  return Array.from(value)
+    .map((char) => {
+      if (char >= "0" && char <= "9") {
+        return `hud.digit.${char}`;
+      }
+      if (char >= "A" && char <= "Z") {
+        return `hud.letter.${char}`;
+      }
+      if (char === "-") {
+        return "hud.hyphen";
+      }
+      return undefined;
+    })
+    .filter((key): key is string => Boolean(key));
+}
+
+function drawItemMetaSprites(item: ItemDef, x: number, y: number, maxWidth: number): boolean {
+  let cursorX = x;
+  const rarity = drawLookupText("rarity", rarityLabel[item.rarity], cursorX, y - 4, {
+    scale: 0.64,
+  });
+  if (!rarity) {
+    return false;
+  }
+  cursorX += rarity.w + 5;
+  text("|", cursorX, y + 1, 12, "#6f7b70", "left", undefined, "rgba(12, 7, 4, 0.9)");
+  cursorX += 12;
+
+  for (const tag of item.tags) {
+    const label = formatTag(tag);
+    const sprite = measureTextSprite(lookupTextSpriteKey("tag", label), 0.62);
+    if (!sprite || cursorX + sprite.w > x + maxWidth) {
+      return true;
+    }
+    drawLookupText("tag", label, cursorX, y - 4, { scale: 0.62 });
+    cursorX += sprite.w + 5;
+  }
+  return true;
+}
+
+function drawFloatingDamage(damage: FloatingText["damage"], x: number, y: number): boolean {
+  if (!damage) {
+    return false;
+  }
+  const scale = damage.critical ? 0.56 : 0.43;
+  if (damage.critical) {
+    drawTextSprite("ui.critical", x, y - 27, { align: "center", scale: 0.72 });
+  }
+  return drawDamageNumber(damage.value, damage.kind, x, y - (damage.critical ? 2 : 0), {
+    align: "center",
+    scale,
+  });
+}
+
+function drawDamageNumber(
+  value: string,
+  kind: DamageSpriteKind,
+  x: number,
+  y: number,
+  options: TextSpriteDrawOptions = {},
+): boolean {
+  const glyphSet = damageGlyphs[kind] ?? damageGlyphs.attack;
+  const skillImage = spriteCache.get(skillDamageAtlasPath);
+  const image =
+    skillImage?.complete && skillImage.naturalWidth > 0
+      ? skillImage
+      : spriteCache.get(textSpriteAtlas.images.damage);
+  if (!image?.complete || image.naturalWidth === 0) {
+    return false;
+  }
+
+  const chars = Array.from(value);
+  const scale = options.scale ?? 1;
+  const totalW = chars.reduce((sum, char) => sum + (glyphSet[char]?.advance ?? 18), 0) * scale;
+  let cursorX = x;
+  if (options.align === "center") {
+    cursorX -= totalW / 2;
+  } else if (options.align === "right" || options.align === "end") {
+    cursorX -= totalW;
+  }
+
+  ctx.save();
+  ctx.globalAlpha *= options.alpha ?? 1;
+  for (const char of chars) {
+    const glyph = glyphSet[char];
+    if (!glyph) {
+      cursorX += 18 * scale;
+      continue;
+    }
+    const glyphW = glyph.w * scale;
+    const glyphH = glyph.h * scale;
+    const drawX = cursorX - ((glyph.w - glyph.advance) * scale) / 2;
+    ctx.drawImage(image, glyph.x, glyph.y, glyph.w, glyph.h, drawX, y, glyphW, glyphH);
+    cursorX += glyph.advance * scale;
+  }
+  ctx.restore();
+  return true;
+}
+
+function damageTextKind(
+  kind: "attack" | "burn" | "poison" | "thorns",
+  critical: boolean,
+): DamageSpriteKind {
+  if (critical) {
+    return "critical";
+  }
+  if (kind === "burn" || kind === "poison" || kind === "thorns") {
+    return kind;
+  }
+  return "attack";
+}
+
 function drawHealthBar(
   x: number,
   y: number,
@@ -1872,8 +2351,9 @@ function drawHealthBar(
   states: BarStatusVisuals = {},
 ): void {
   const theme = barThemes[themeName];
-  const frame = spriteCache.get(theme.framePath);
-  if (!frame?.complete || frame.naturalWidth === 0) {
+  const back = spriteCache.get(theme.backPath);
+  const front = spriteCache.get(theme.frontPath);
+  if (!back?.complete || back.naturalWidth === 0 || !front?.complete || front.naturalWidth === 0) {
     drawFallbackBar(
       x,
       y + h * 0.36,
@@ -1885,145 +2365,14 @@ function drawHealthBar(
     return;
   }
 
-  const cropHeight = Math.min(theme.frameCropHeight, frame.naturalHeight);
-  const layout = barFrameLayout(theme, frame.naturalWidth, x, w, h, cropHeight);
-  const fillX = sourceBarXToDest(theme, frame.naturalWidth, layout, x, theme.fillLeft);
-  const fillRight = sourceBarXToDest(
-    theme,
-    frame.naturalWidth,
-    layout,
-    x,
-    theme.fillLeft + theme.fillWidth,
-  );
-  const fillY = y + (theme.fillTop / cropHeight) * h;
-  const fillW = Math.max(0, fillRight - fillX);
-  const fillH = (theme.fillHeight / cropHeight) * h;
-
+  drawSprite(theme.backPath, x, y, w, h, 0);
+  const fillX = x + w * theme.fillInset.left;
+  const fillY = y + h * theme.fillInset.top;
+  const fillW = Math.max(0, w * (1 - theme.fillInset.left - theme.fillInset.right));
+  const fillH = Math.max(1, h * (1 - theme.fillInset.top - theme.fillInset.bottom));
   drawBarFill(themeName, fillX, fillY, fillW, fillH, ratio, now, states);
-  drawStretchableBarFrame(frame, theme, x, y, h, cropHeight, layout);
+  drawSprite(theme.frontPath, x, y, w, h, 0);
   drawBarStatusBadges(x, y, w, h, now, states);
-}
-
-function drawStretchableBarFrame(
-  frame: HTMLImageElement,
-  theme: BarTheme,
-  x: number,
-  y: number,
-  h: number,
-  cropHeight: number,
-  layout: BarFrameLayout,
-): void {
-  const rightCapSourceW = frame.naturalWidth - theme.frameRightCapX;
-
-  drawFrameSlice(frame, 0, theme.frameLeftCap, x, y, layout.leftCapW, h, cropHeight);
-  drawFrameSlice(
-    frame,
-    theme.frameLeftCap,
-    theme.frameCenterX - theme.frameLeftCap,
-    x + layout.leftCapW,
-    y,
-    layout.railW,
-    h,
-    cropHeight,
-  );
-  drawFrameSlice(
-    frame,
-    theme.frameCenterX,
-    theme.frameCenterWidth,
-    layout.centerX,
-    y,
-    layout.centerW,
-    h,
-    cropHeight,
-  );
-  drawFrameSlice(
-    frame,
-    theme.frameCenterX + theme.frameCenterWidth,
-    theme.frameRightCapX - theme.frameCenterX - theme.frameCenterWidth,
-    layout.rightRailX,
-    y,
-    layout.railW,
-    h,
-    cropHeight,
-  );
-  drawFrameSlice(
-    frame,
-    theme.frameRightCapX,
-    rightCapSourceW,
-    layout.rightCapX,
-    y,
-    layout.rightCapW,
-    h,
-    cropHeight,
-  );
-}
-
-function barFrameLayout(
-  theme: BarTheme,
-  frameWidth: number,
-  x: number,
-  w: number,
-  h: number,
-  cropHeight: number,
-): BarFrameLayout {
-  const scale = h / cropHeight;
-  const rightCapSourceW = frameWidth - theme.frameRightCapX;
-  const leftCapW = Math.min(w * 0.28, theme.frameLeftCap * scale);
-  const centerW = Math.min(w * 0.18, theme.frameCenterWidth * scale);
-  const rightCapW = Math.min(w * 0.28, rightCapSourceW * scale);
-  const railW = Math.max(1, (w - leftCapW - centerW - rightCapW) / 2);
-  const centerX = x + leftCapW + railW;
-  const rightRailX = centerX + centerW;
-  const rightCapX = x + w - rightCapW;
-  return { leftCapW, centerW, rightCapW, railW, centerX, rightRailX, rightCapX };
-}
-
-function sourceBarXToDest(
-  theme: BarTheme,
-  frameWidth: number,
-  layout: BarFrameLayout,
-  x: number,
-  sourceX: number,
-): number {
-  if (sourceX <= theme.frameLeftCap) {
-    return x + (sourceX / theme.frameLeftCap) * layout.leftCapW;
-  }
-  if (sourceX <= theme.frameCenterX) {
-    const sourceW = theme.frameCenterX - theme.frameLeftCap;
-    return x + layout.leftCapW + ((sourceX - theme.frameLeftCap) / sourceW) * layout.railW;
-  }
-  if (sourceX <= theme.frameCenterX + theme.frameCenterWidth) {
-    return (
-      layout.centerX + ((sourceX - theme.frameCenterX) / theme.frameCenterWidth) * layout.centerW
-    );
-  }
-  if (sourceX <= theme.frameRightCapX) {
-    const sourceW = theme.frameRightCapX - theme.frameCenterX - theme.frameCenterWidth;
-    return (
-      layout.rightRailX +
-      ((sourceX - theme.frameCenterX - theme.frameCenterWidth) / sourceW) * layout.railW
-    );
-  }
-  return (
-    layout.rightCapX +
-    ((sourceX - theme.frameRightCapX) / (frameWidth - theme.frameRightCapX)) * layout.rightCapW
-  );
-}
-
-function drawFrameSlice(
-  frame: HTMLImageElement,
-  sourceX: number,
-  sourceW: number,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  cropHeight: number,
-): void {
-  if (sourceW <= 0 || w <= 0) {
-    return;
-  }
-  ctx.drawImage(frame, sourceX, 0, sourceW, cropHeight, x, y, w, h);
 }
 
 function drawBarFill(
@@ -2040,11 +2389,6 @@ function drawBarFill(
   const fillRatio = Math.max(0, Math.min(1, ratio));
   const currentW = Math.max(0, w * fillRatio);
   const radius = Math.max(2, h / 2);
-
-  ctx.save();
-  ctx.fillStyle = theme.troughColor;
-  roundRect(x, y, w, h, radius, true);
-  ctx.restore();
 
   if (currentW <= 0.5) {
     return;
@@ -2342,6 +2686,10 @@ function preloadSprites(): void {
     ...Object.values(actorSprites),
     ...Object.values(actorAnimationStrips).map((strip) => strip.path),
     ...Object.values(uiSprites),
+    ...Object.values(labeledButtonSprites).flatMap((sprites) => [sprites.normal, sprites.pressed]),
+    ...textSpriteImages,
+    skillDamageAtlasPath,
+    ...Object.values(skillTextSprites).map((sprite) => sprite.path),
     ...Object.values(effectStrips).map((strip) => strip.path),
     ...Object.values(rewardCardSprites).flatMap((sprites) => [sprites.normal, sprites.hover]),
   ]) {
@@ -2374,6 +2722,44 @@ function drawSprite(
   ctx.save();
   clippedRoundRect(x, y, w, h, radius);
   ctx.drawImage(image, x, y, w, h);
+  ctx.restore();
+  return true;
+}
+
+function drawCenteredSprite(
+  path: string | undefined,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  radius: number,
+  padding = 0,
+): boolean {
+  if (!path) {
+    return false;
+  }
+  const image = spriteCache.get(path);
+  if (!image?.complete || image.naturalWidth === 0) {
+    return false;
+  }
+  const bounds = getSpriteBounds(path, image);
+  if (!bounds) {
+    return drawSprite(path, x, y, w, h, radius);
+  }
+
+  const sourceW = bounds.right - bounds.left + 1;
+  const sourceH = bounds.bottom - bounds.top + 1;
+  const maxW = Math.max(1, w - padding * 2);
+  const maxH = Math.max(1, h - padding * 2);
+  const scale = Math.min(maxW / sourceW, maxH / sourceH);
+  const drawW = sourceW * scale;
+  const drawH = sourceH * scale;
+  const drawX = x + (w - drawW) / 2;
+  const drawY = y + (h - drawH) / 2;
+
+  ctx.save();
+  clippedRoundRect(x, y, w, h, radius);
+  ctx.drawImage(image, bounds.left, bounds.top, sourceW, sourceH, drawX, drawY, drawW, drawH);
   ctx.restore();
   return true;
 }
@@ -2944,19 +3330,6 @@ function wrapLines(value: string, maxWidth: number, size: number): string[] {
   });
 }
 
-function phaseLabel(): string {
-  if (snapshot.phase === "battle") {
-    return paused ? "沙漏凝住" : "队伍自动交锋";
-  }
-  if (snapshot.phase === "victory") {
-    return "胜利";
-  }
-  if (snapshot.phase === "defeat") {
-    return "失败";
-  }
-  return "择宝与整备";
-}
-
 function gridOrigin(): Point {
   return {
     x: BAG_X + BAG_GRID_SOURCE_X * BAG_SCALE,
@@ -2965,19 +3338,7 @@ function gridOrigin(): Point {
 }
 
 function drawSceneGround(): void {
-  ctx.save();
-  ctx.globalAlpha = 0.42;
-  const glow = ctx.createRadialGradient(WIDTH / 2, 420, 80, WIDTH / 2, 420, 520);
-  glow.addColorStop(0, "rgba(234, 176, 92, 0.22)");
-  glow.addColorStop(0.45, "rgba(45, 72, 68, 0.12)");
-  glow.addColorStop(1, "rgba(0, 0, 0, 0)");
-  ctx.fillStyle = glow;
-  ctx.fillRect(0, 140, WIDTH, 470);
-  ctx.restore();
-
-  ctx.strokeStyle = "rgba(220, 162, 75, 0.18)";
-  ctx.lineWidth = 2;
-  line(300, 434, 900, 434);
+  // The background is environment-only; interactive UI is drawn as separate components.
 }
 
 function drawActorShadow(x: number, y: number, w: number, h: number): void {
@@ -3012,6 +3373,95 @@ function drawSmallSeal(x: number, y: number, w: number, label: string): void {
   fittedText(label, x + w / 2, y + 7, w - 36, 13, "#d7c394", "center");
 }
 
+function drawStagePlaque(x: number, y: number, w: number, h: number): void {
+  ctx.save();
+  ctx.globalAlpha = 0.9;
+  const rendered = drawSprite(uiSprites.stagePlaque, x, y, w, h, 0);
+  ctx.restore();
+  if (!rendered) {
+    drawSmallSeal(x + 54, y + 35, w - 108, `${snapshot.waveIndex + 1} | ${snapshot.waveName}`);
+    return;
+  }
+  ctx.save();
+  ctx.globalAlpha = 0.9;
+  drawTextSpriteSequence(
+    ["hud.stagePrefix", ...hudDigitKeys(snapshot.waveIndex + 1), "hud.stageSuffix"],
+    x + w / 2,
+    y + h * 0.6,
+    {
+      align: "center",
+      scale: 0.42,
+      maxWidth: w - 120,
+    },
+    -2,
+  );
+
+  if (snapshot.waveIndex === 11) {
+    drawTextSpriteSequence(
+      ["hud.wave12.char.yu", "hud.wave12.char.jin", "hud.wave12.char.lie", "hud.wave12.char.feng"],
+      x + w / 2,
+      y + h * 0.73,
+      {
+        align: "center",
+        scale: 0.47,
+        maxWidth: w - 86,
+      },
+      -5,
+    );
+  } else if (
+    !drawTextSprite(`hud.wave.${snapshot.waveIndex}`, x + w / 2, y + h * 0.73, {
+      align: "center",
+      scale: 0.5,
+      maxWidth: w - 84,
+    })
+  ) {
+    fittedText(
+      snapshot.waveName,
+      x + w / 2,
+      y + h * 0.77,
+      w - 92,
+      14,
+      "#ffe8a7",
+      "center",
+      '"Songti SC", Georgia, serif',
+      "rgba(7, 8, 6, 0.95)",
+    );
+  }
+  ctx.restore();
+}
+
+function drawEmblemPlaque(x: number, y: number, w: number, h: number): void {
+  ctx.save();
+  ctx.globalAlpha = 0.88;
+  const rendered = drawSprite(uiSprites.emblemPlaque, x, y, w, h, 0);
+  ctx.restore();
+  if (!rendered) {
+    drawSmallSeal(x, y + 16, w, `种子 ${snapshot.shareCode}`);
+    return;
+  }
+  const contentX = x + w * 0.57;
+  const contentW = w * 0.58;
+  ctx.save();
+  ctx.globalAlpha = 0.88;
+  drawTextSprite("hud.seedLabel", contentX, y + h * 0.57, {
+    align: "center",
+    scale: 0.38,
+    maxWidth: 44,
+  });
+  drawTextSpriteSequence(
+    hudShareCodeKeys(snapshot.shareCode),
+    contentX,
+    y + h * 0.72,
+    {
+      align: "center",
+      scale: 0.3,
+      maxWidth: contentW,
+    },
+    -1.5,
+  );
+  ctx.restore();
+}
+
 function drawPanelBackground(path: string, x: number, y: number, w: number, h: number): boolean {
   return drawNinePatch(path, x, y, w, h, 112, 34);
 }
@@ -3023,65 +3473,10 @@ function drawCellEmptyState(x: number, y: number): void {
   ctx.restore();
 }
 
-function drawPlayerStatusPanel(x: number, y: number, w: number, h: number): void {
-  const stats = snapshot.player.stats;
-  const now = performance.now();
-  drawPanelBackground(uiSprites.panelHeroStatus, x, y, w, h);
-  const inset = 58;
-
-  text(
-    "英雄状态",
-    x + inset,
-    y + 50,
-    18,
-    "#e5f4c8",
-    "left",
-    '"Songti SC", Georgia, serif',
-    "rgba(4, 12, 8, 0.9)",
-  );
-  text(
-    `${Math.ceil(snapshot.player.hp)}/${Math.ceil(stats.maxHp)}`,
-    x + w - inset,
-    y + 52,
-    14,
-    "#d7f2b6",
-    "right",
-    undefined,
-    "rgba(4, 12, 8, 0.9)",
-  );
-  drawHealthBar(
-    x + inset - 16,
-    y + 62,
-    w - inset * 2 + 32,
-    42,
-    snapshot.player.hp / stats.maxHp,
-    "player",
-    now,
-  );
-  drawDivider(x + inset, y + 112, w - inset * 2);
-
-  const rows = [
-    ["攻击", fmt(stats.attack), "攻速", fmt(stats.attackSpeed)],
-    ["护甲", fmt(stats.armor), "回复", fmt(stats.regen)],
-    ["燃烧", fmt(stats.burn), "毒", fmt(stats.poison)],
-    ["反伤", fmt(stats.thorns), "暴击", `${Math.round(stats.critChance * 100)}%`],
-  ] as const;
-
-  let cursorY = y + 124;
-  for (const [leftLabel, leftValue, rightLabel, rightValue] of rows) {
-    drawCompactStat(x + inset, cursorY, 90, leftLabel, leftValue);
-    drawCompactStat(x + inset + 124, cursorY, 90, rightLabel, rightValue);
-    cursorY += 21;
-  }
-}
-
-function drawCompactStat(x: number, y: number, w: number, label: string, value: string): void {
-  text(label, x, y + 2, 12, "#a9c09f", "left", undefined, "rgba(4, 12, 8, 0.9)");
-  text(value, x + w, y + 2, 13, "#f1e6bd", "right", undefined, "rgba(4, 12, 8, 0.9)");
-}
-
 function drawStatChip(x: number, y: number, w: number, label: string, value: string): void {
-  text(label, x, y + 4, 13, "#aeb8ad", "left", undefined, "rgba(12, 7, 4, 0.86)");
+  if (!drawLookupText("stat", label, x - 5, y, { scale: 0.6, maxWidth: 54 })) {
+    text(label, x, y + 4, 13, "#aeb8ad", "left", undefined, "rgba(12, 7, 4, 0.86)");
+  }
   text(value, x + w, y + 4, 13, "#ffe0a0", "right", undefined, "rgba(12, 7, 4, 0.86)");
 }
 
@@ -3097,16 +3492,19 @@ function drawEffectRow(
   w: number,
   row: { active: boolean; description: string },
 ): void {
-  text(
-    row.active ? "已触发" : "未触发",
-    x,
-    y + 4,
-    13,
-    row.active ? "#8ff0b0" : "#9aa49c",
-    "left",
-    undefined,
-    "rgba(12, 7, 4, 0.86)",
-  );
+  const statusKey = row.active ? "ui.active" : "ui.inactive";
+  if (!drawTextSprite(statusKey, x - 5, y, { scale: 0.62, maxWidth: 62 })) {
+    text(
+      row.active ? "已触发" : "未触发",
+      x,
+      y + 4,
+      13,
+      row.active ? "#8ff0b0" : "#9aa49c",
+      "left",
+      undefined,
+      "rgba(12, 7, 4, 0.86)",
+    );
+  }
   text(row.description, x + 80, y + 4, 13, "#ead7b1", "left", undefined, "rgba(12, 7, 4, 0.86)");
 }
 
