@@ -128,8 +128,47 @@ describe("backpack core", () => {
 
     const firstBoss = defaultContent.enemies.find((enemy) => enemy.id === "boss")!;
     const finalBoss = defaultContent.enemies.find((enemy) => enemy.id === "boss_core")!;
+    const firstBossWave = defaultContent.waves[4]!;
+    assert.equal(
+      firstBossWave.enemies.reduce((sum, entry) => sum + entry.count, 0),
+      1,
+    );
+    assert.ok(firstBoss.traits?.some((trait) => trait.type === "harden"));
     assert.ok(finalBoss.maxHp > firstBoss.maxHp);
     assert.ok(finalBoss.attack > firstBoss.attack);
+  });
+
+  it("runs boss harden as a timed enemy trait", () => {
+    const traitContent = {
+      ...defaultContent,
+      waves: [
+        {
+          id: "trait_boss",
+          name: "硬化首领",
+          enemies: [{ enemyId: "boss", count: 1 }],
+          rewardBias: 0,
+        },
+      ],
+    };
+    const state = createGame("boss-trait", traitContent);
+    dispatchCommand(state, { type: "startBattle" }, traitContent);
+
+    tickGame(state, 1500, traitContent);
+    assert.equal(state.enemies[0]!.traitStates[0]!.active, false);
+
+    tickGame(state, 150, traitContent);
+    assert.equal(state.enemies[0]!.traitStates[0]!.active, true);
+    let events = querySnapshot(state, traitContent).combatEvents;
+    assert.ok(
+      events.some((event) => event.type === "enemyTraitStart" && event.traitType === "harden"),
+    );
+
+    tickGame(state, 2600, traitContent);
+    assert.equal(state.enemies[0]!.traitStates[0]!.active, false);
+    events = querySnapshot(state, traitContent).combatEvents;
+    assert.ok(
+      events.some((event) => event.type === "enemyTraitEnd" && event.traitType === "harden"),
+    );
   });
 
   it("caps every wave at three enemies for stable battle staging", () => {

@@ -11,6 +11,8 @@ import {
   type EffectDef,
   type EnemyDef,
   type EnemyInstance,
+  type EnemyTraitDef,
+  type EnemyTraitState,
   type GameCommand,
   type GameContent,
   type GameSnapshot,
@@ -189,6 +191,8 @@ export function tickGame(state: GameState, deltaMs: number, content = defaultCon
     0,
     build.stats.maxHp,
   );
+
+  updateEnemyTraits(state, content);
 
   state.combat.playerAttackTimerMs -= deltaMs;
   while (state.combat.playerAttackTimerMs <= 0 && state.enemies.length > 0) {
@@ -687,6 +691,7 @@ function spawnWave(state: GameState, content: GameContent): void {
       hp: def.maxHp,
       attackTimerMs: nextInt(state.rng, 420, 1220),
       lane: lanes[index] ?? 1,
+      traitStates: createEnemyTraitStates(def),
     });
     state.nextEnemyId += 1;
   }
@@ -819,7 +824,8 @@ function dealEnemyDamage(
   }
   const enemyDef = getEnemyDef(content, enemy.defId);
   const target = enemyCombatTarget(state, enemy);
-  const damage = ignoreArmor ? rawDamage : Math.max(1, rawDamage - enemyDef.armor * 0.65);
+  const armor = enemyEffectiveArmor(enemy, enemyDef);
+  const damage = ignoreArmor ? rawDamage : Math.max(1, rawDamage - armor * 0.65);
   const actual = Math.min(enemy.hp, damage);
   enemy.hp -= actual;
   state.totals.damageDone += actual;
@@ -861,6 +867,73 @@ function dealEnemyDamage(
   }
 }
 
+function createEnemyTraitStates(def: EnemyDef): EnemyTraitState[] {
+  return (def.traits ?? []).map((trait) => ({
+    type: trait.type,
+    active: false,
+    startedAtMs: 0,
+    activeUntilMs: 0,
+    nextTriggerMs: trait.initialDelayMs ?? trait.cooldownMs,
+    triggerCount: 0,
+  }));
+}
+
+function updateEnemyTraits(state: GameState, content: GameContent): void {
+  for (const enemy of state.enemies) {
+    if (enemy.hp <= 0 || enemy.traitStates.length === 0) {
+      continue;
+    }
+    const enemyDef = getEnemyDef(content, enemy.defId);
+    const traits = enemyDef.traits ?? [];
+    for (let index = 0; index < traits.length; index += 1) {
+      const trait = traits[index]!;
+      const traitState = enemy.traitStates[index];
+      if (!traitState || traitState.type !== trait.type) {
+        continue;
+      }
+      updateEnemyTrait(state, enemy, trait, traitState);
+    }
+  }
+}
+
+function updateEnemyTrait(
+  state: GameState,
+  enemy: EnemyInstance,
+  trait: EnemyTraitDef,
+  traitState: EnemyTraitState,
+): void {
+  if (trait.type !== "harden") {
+    return;
+  }
+
+  if (traitState.active && state.waveTimeMs >= traitState.activeUntilMs) {
+    traitState.active = false;
+    traitState.nextTriggerMs = state.waveTimeMs + trait.cooldownMs;
+    pushEnemyTraitEvent(state, enemy, "enemyTraitEnd", traitState.type);
+  }
+
+  if (!traitState.active && state.waveTimeMs >= traitState.nextTriggerMs) {
+    traitState.active = true;
+    traitState.startedAtMs = state.waveTimeMs;
+    traitState.activeUntilMs = state.waveTimeMs + trait.durationMs;
+    traitState.triggerCount += 1;
+    pushEnemyTraitEvent(state, enemy, "enemyTraitStart", traitState.type);
+  }
+}
+
+function enemyEffectiveArmor(enemy: EnemyInstance, enemyDef: EnemyDef): number {
+  let armor = enemyDef.armor;
+  const traits = enemyDef.traits ?? [];
+  for (let index = 0; index < traits.length; index += 1) {
+    const trait = traits[index]!;
+    const traitState = enemy.traitStates[index];
+    if (trait.type === "harden" && traitState?.active) {
+      armor += trait.armorBonus;
+    }
+  }
+  return armor;
+}
+
 function splitDamageByStat(
   build: BuildSnapshot,
   stat: StatKey,
@@ -894,6 +967,23 @@ function enemyCombatTarget(state: GameState, enemy: EnemyInstance): { lane: numb
     }
   }
   return { lane: enemy.lane, slot };
+}
+
+function pushEnemyTraitEvent(
+  state: GameState,
+  enemy: EnemyInstance,
+  type: "enemyTraitStart" | "enemyTraitEnd",
+  traitType: EnemyTraitState["type"],
+): void {
+  const target = enemyCombatTarget(state, enemy);
+  pushCombatEvent(state, {
+    type,
+    enemyId: enemy.id,
+    enemyDefId: enemy.defId,
+    enemyLane: target.lane,
+    enemySlot: target.slot,
+    traitType,
+  });
 }
 
 function removeDeadEnemies(state: GameState): void {

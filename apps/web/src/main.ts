@@ -140,6 +140,20 @@ const actorAnimationStrips: Record<string, StripDef> = {
     frameHeight: 256,
     anchorBottom: true,
   },
+  bossAttack: {
+    path: "/assets/actors/boss-attack-strip-6x256.png",
+    frameCount: 6,
+    frameWidth: 256,
+    frameHeight: 256,
+    anchorBottom: true,
+  },
+  bossHit: {
+    path: "/assets/actors/boss-hit-strip-6x256.png",
+    frameCount: 6,
+    frameWidth: 256,
+    frameHeight: 256,
+    anchorBottom: true,
+  },
 };
 const backgroundSprite = "/assets/backgrounds/dungeon-arena-clean-v1.png";
 const uiBase = "/assets/ui";
@@ -157,6 +171,9 @@ const uiSprites = {
   emblemPlaque: `${uiBase}/hud/emblem-sign-v3.png`,
   debuffPoison: `${uiBase}/debuff-poison.png`,
   debuffBurn: `${uiBase}/debuff-burn.png`,
+  debuffHarden: `${uiBase}/debuff-harden.png`,
+  barHardenOverlay: `${uiBase}/bar-harden-overlay.png`,
+  hardenShell: `${effectsBase}/harden-shell.png`,
   panelItemTooltip: `${uiBase}/panel-item-tooltip.png`,
   panelResult: `${uiBase}/panel-result.png`,
   buttonNormal: `${uiBase}/button-normal.png`,
@@ -408,8 +425,16 @@ interface FloatingText {
 }
 
 interface EnemyHitEffect {
+  startedAt: number;
   until: number;
   critical: boolean;
+}
+
+interface EnemyAttackEffect {
+  id: number;
+  enemyId: string;
+  startedAt: number;
+  durationMs: number;
 }
 
 interface StrikeEffect {
@@ -463,6 +488,11 @@ interface EnemyBurnState {
   tickFlashUntil: number;
 }
 
+interface EnemyHardenState {
+  activeUntil: number;
+  tickFlashUntil: number;
+}
+
 type BarThemeName = "player" | "enemy";
 
 interface BarTheme {
@@ -483,6 +513,7 @@ interface BarTheme {
 interface BarStatusVisuals {
   poison?: EnemyPoisonState | null;
   burn?: EnemyBurnState | null;
+  harden?: EnemyHardenState | null;
 }
 
 const canvas = document.querySelector<HTMLCanvasElement>("#game");
@@ -511,6 +542,7 @@ let screenShakeUntil = 0;
 let screenShakeStrength = 0;
 const floatingTexts: FloatingText[] = [];
 const enemyHitEffects = new Map<string, EnemyHitEffect>();
+const enemyAttackEffects: EnemyAttackEffect[] = [];
 const itemPulseUntil = new Map<string, number>();
 const strikeEffects: StrikeEffect[] = [];
 const heroAttackEffects: HeroAttackEffect[] = [];
@@ -519,6 +551,7 @@ const uiSpriteEffects: AnimatedSpriteEffect[] = [];
 const deferredVisualActions: DeferredVisualAction[] = [];
 const enemyPoisonStates = new Map<string, EnemyPoisonState>();
 const enemyBurnStates = new Map<string, EnemyBurnState>();
+const enemyHardenFlashUntil = new Map<string, number>();
 const debugWindow = window as typeof window & {
   __backpackDebug?: () => GameSnapshot;
   __backpackDebugForceResult?: (phase?: "victory" | "defeat") => GameSnapshot;
@@ -932,17 +965,44 @@ function drawEnemies(): void {
     const y = ENEMY_AREA.topY + laneIndex * ENEMY_AREA.laneGapY;
     const spriteId = enemy.def.spriteId ?? enemy.def.id;
     const size = spriteId === "boss" ? 158 : 116;
+    const renderSize = size + (spriteId === "boss" ? 24 : 0);
     const hit = enemyHitEffects.get(enemy.instance.id);
+    const attack = currentEnemyAttack(enemy.instance.id, now);
     const poisonState = enemyPoisonStates.get(enemy.instance.id);
     const burnState = enemyBurnStates.get(enemy.instance.id);
+    const hardenTrait = enemy.instance.traitStates.find(
+      (trait) => trait.type === "harden" && trait.active,
+    );
+    const hardenFlashUntil = enemyHardenFlashUntil.get(enemy.instance.id) ?? 0;
+    const hardenState =
+      hardenTrait || hardenFlashUntil > now
+        ? {
+            activeUntil: hardenTrait ? now + 1450 : hardenFlashUntil,
+            tickFlashUntil: hardenFlashUntil,
+          }
+        : null;
     const hitAlpha = hit ? Math.max(0, Math.min(1, (hit.until - now) / 240)) : 0;
     const hitBoost = hitAlpha * (hit?.critical ? 12 : 6);
     const groundY = y + size * 0.42;
     drawActorShadow(x, groundY, size, 22);
+    const animated =
+      spriteId === "boss" &&
+      (drawEnemyBossAttackFrame(attack, x, groundY, renderSize, now) ||
+        drawEnemyBossHitFrame(hit, x, groundY, renderSize + hitBoost, now));
     if (
-      !drawAnchoredActorSprite(actorSprites[spriteId], x, groundY, size + hitBoost, size + hitBoost)
+      !animated &&
+      !drawAnchoredActorSprite(
+        actorSprites[spriteId],
+        x,
+        groundY,
+        renderSize + hitBoost,
+        renderSize + hitBoost,
+      )
     ) {
       text(enemy.def.symbol, x, y - 10, 13, "#fff4df", "center", "monospace");
+    }
+    if (hardenState) {
+      drawEnemyHardenShell(x, groundY - size * 0.44, size, hardenState, now);
     }
     if (poisonState && poisonState.activeUntil > now) {
       drawEnemyPoisonMotes(x, groundY - size * 0.44, size, poisonState, now);
@@ -970,6 +1030,7 @@ function drawEnemies(): void {
       {
         poison: poisonState?.activeUntil && poisonState.activeUntil > now ? poisonState : null,
         burn: burnState?.activeUntil && burnState.activeUntil > now ? burnState : null,
+        harden: hardenState,
       },
     );
   }
@@ -1110,25 +1171,54 @@ function handleCombatEvent(event: GameSnapshot["combatEvents"][number], now: num
 
     case "enemyAttack": {
       const point = enemyPoint(event.enemyLane, event.enemySlot);
-      addStrike(point, HERO_DAMAGE_POINT, "#ff7474", now, false, event.id);
-      addFloatingText({
-        id: event.id,
-        x: HERO_DAMAGE_POINT.x + jitter(event.id, 20),
-        y: HERO_DAMAGE_POINT.y - 22,
-        dx: 0,
-        value: `-${formatDamage(event.amount)}`,
-        color: "#ff8b7a",
-        size: 18,
-        outline: "rgba(24, 6, 4, 0.9)",
-        startedAt: now,
-        durationMs: 720,
-        damage: {
+      const emitEnemyImpact = (impactAt: number): void => {
+        addStrike(point, HERO_DAMAGE_POINT, "#ff7474", impactAt, false, event.id);
+        addFloatingText({
+          id: event.id,
+          x: HERO_DAMAGE_POINT.x + jitter(event.id, 20),
+          y: HERO_DAMAGE_POINT.y - 22,
+          dx: 0,
           value: `-${formatDamage(event.amount)}`,
-          kind: "enemy",
-          critical: false,
-        },
-      });
-      bumpScreenShake(now, 4, 140);
+          color: "#ff8b7a",
+          size: 18,
+          outline: "rgba(24, 6, 4, 0.9)",
+          startedAt: impactAt,
+          durationMs: 720,
+          damage: {
+            value: `-${formatDamage(event.amount)}`,
+            kind: "enemy",
+            critical: false,
+          },
+        });
+        bumpScreenShake(impactAt, 4, 140);
+      };
+      if (event.enemyDefId.includes("boss")) {
+        const attack = addEnemyAttack(event.enemyId, now, event.id);
+        queueDeferredVisualAction({
+          id: event.id,
+          triggerAt: enemyAttackImpactAt(attack),
+          run: () => {
+            emitEnemyImpact(enemyAttackImpactAt(attack));
+          },
+        });
+      } else {
+        emitEnemyImpact(now);
+      }
+      return;
+    }
+
+    case "enemyTraitStart": {
+      if (event.traitType === "harden") {
+        enemyHardenFlashUntil.set(event.enemyId, now + 520);
+        bumpScreenShake(now, 3, 130);
+      }
+      return;
+    }
+
+    case "enemyTraitEnd": {
+      if (event.traitType === "harden") {
+        enemyHardenFlashUntil.set(event.enemyId, now + 320);
+      }
       return;
     }
 
@@ -1240,6 +1330,7 @@ function emitDamageVisuals(event: DamageCombatEvent, point: Point, startedAt: nu
   const color = damageColor(event.kind, event.critical);
   if (event.kind === "attack" || event.kind === "thorns") {
     enemyHitEffects.set(event.targetId, {
+      startedAt,
       until: startedAt + (event.critical ? 360 : 250),
       critical: event.critical,
     });
@@ -1425,6 +1516,7 @@ function pruneCombatVisuals(now: number): void {
   removeExpired(floatingTexts, (item) => now - item.startedAt <= item.durationMs);
   removeExpired(strikeEffects, (item) => now - item.startedAt <= item.durationMs);
   removeExpired(heroAttackEffects, (item) => now - item.startedAt <= item.durationMs);
+  removeExpired(enemyAttackEffects, (item) => now - item.startedAt <= item.durationMs);
   removeExpired(arenaSpriteEffects, (item) => now - item.startedAt <= item.durationMs);
   removeExpired(uiSpriteEffects, (item) => now - item.startedAt <= item.durationMs);
   for (const [id, effect] of enemyHitEffects) {
@@ -1445,6 +1537,11 @@ function pruneCombatVisuals(now: number): void {
   for (const [id, state] of enemyBurnStates) {
     if (state.activeUntil <= now) {
       enemyBurnStates.delete(id);
+    }
+  }
+  for (const [id, until] of enemyHardenFlashUntil) {
+    if (until <= now) {
+      enemyHardenFlashUntil.delete(id);
     }
   }
   if (screenShakeUntil <= now) {
@@ -1470,12 +1567,14 @@ function clearCombatVisuals(): void {
   floatingTexts.length = 0;
   strikeEffects.length = 0;
   heroAttackEffects.length = 0;
+  enemyAttackEffects.length = 0;
   arenaSpriteEffects.length = 0;
   uiSpriteEffects.length = 0;
   deferredVisualActions.length = 0;
   enemyHitEffects.clear();
   enemyPoisonStates.clear();
   enemyBurnStates.clear();
+  enemyHardenFlashUntil.clear();
   itemPulseUntil.clear();
 }
 
@@ -1489,6 +1588,95 @@ function screenShakeOffset(now: number): Point {
     x: Math.sin(now * 0.09) * amount,
     y: Math.cos(now * 0.11) * amount * 0.62,
   };
+}
+
+function addEnemyAttack(enemyId: string, now: number, id: number): EnemyAttackEffect {
+  const durationMs = 580;
+  const previous = enemyAttackEffects.findLast((effect) => effect.enemyId === enemyId);
+  const effect = {
+    id,
+    enemyId,
+    startedAt: previous ? Math.max(now, previous.startedAt + previous.durationMs) : now,
+    durationMs,
+  };
+  enemyAttackEffects.push(effect);
+  return effect;
+}
+
+function currentEnemyAttack(enemyId: string, now: number): EnemyAttackEffect | null {
+  for (let index = 0; index < enemyAttackEffects.length; index += 1) {
+    const effect = enemyAttackEffects[index]!;
+    if (effect.enemyId !== enemyId || now < effect.startedAt) {
+      continue;
+    }
+    if (now - effect.startedAt <= effect.durationMs) {
+      return effect;
+    }
+  }
+  return null;
+}
+
+function enemyAttackFrame(attack: EnemyAttackEffect | null, now: number): number {
+  if (!attack || now < attack.startedAt) {
+    return 0;
+  }
+  const progress = Math.max(0, Math.min(1, (now - attack.startedAt) / attack.durationMs));
+  const sequence = [0, 1, 2, 3, 4, 5, 5, 5];
+  return sequence[Math.min(sequence.length - 1, Math.floor(progress * sequence.length))] ?? 5;
+}
+
+function enemyAttackImpactAt(attack: EnemyAttackEffect): number {
+  return attack.startedAt + attack.durationMs * (4 / 8);
+}
+
+function enemyHitFrame(hit: EnemyHitEffect | undefined, now: number): number {
+  if (!hit || now < hit.startedAt) {
+    return 0;
+  }
+  const duration = Math.max(1, hit.until - hit.startedAt);
+  const progress = Math.max(0, Math.min(1, (now - hit.startedAt) / duration));
+  const sequence = [0, 1, 2, 3, 4, 5];
+  return sequence[Math.min(sequence.length - 1, Math.floor(progress * sequence.length))] ?? 5;
+}
+
+function drawEnemyBossAttackFrame(
+  attack: EnemyAttackEffect | null,
+  x: number,
+  groundY: number,
+  size: number,
+  now: number,
+): boolean {
+  if (!attack) {
+    return false;
+  }
+  return drawActorStripFrame(
+    actorAnimationStrips.bossAttack,
+    enemyAttackFrame(attack, now),
+    x,
+    groundY - size / 2,
+    size,
+    size,
+  );
+}
+
+function drawEnemyBossHitFrame(
+  hit: EnemyHitEffect | undefined,
+  x: number,
+  groundY: number,
+  size: number,
+  now: number,
+): boolean {
+  if (!hit || hit.until <= now) {
+    return false;
+  }
+  return drawActorStripFrame(
+    actorAnimationStrips.bossHit,
+    enemyHitFrame(hit, now),
+    x,
+    groundY - size / 2,
+    size,
+    size,
+  );
 }
 
 function addHeroAttack(
@@ -2446,6 +2634,21 @@ function drawBarStateEffects(
   now: number,
   states: BarStatusVisuals,
 ): void {
+  if (states.harden) {
+    const activeAlpha = Math.max(0, Math.min(1, (states.harden.activeUntil - now) / 1450));
+    const flashAlpha = Math.max(0, Math.min(1, (states.harden.tickFlashUntil - now) / 320));
+    const image = spriteCache.get(uiSprites.barHardenOverlay);
+    ctx.save();
+    ctx.globalAlpha = 0.24 + activeAlpha * 0.18 + flashAlpha * 0.18;
+    if (image?.complete && image.naturalWidth > 0) {
+      const textureW = Math.max(w, h * 9);
+      const offset = (now * 0.018) % textureW;
+      for (let drawX = x - offset - textureW; drawX < x + w + textureW; drawX += textureW) {
+        ctx.drawImage(image, drawX, y - h * 0.22, textureW, h * 1.44);
+      }
+    }
+    ctx.restore();
+  }
   if (states.poison) {
     const activeAlpha = Math.max(0, Math.min(1, (states.poison.activeUntil - now) / 1450));
     const flashAlpha = Math.max(0, Math.min(1, (states.poison.tickFlashUntil - now) / 320));
@@ -2508,7 +2711,12 @@ function drawBarStatusBadges(
   now: number,
   states: BarStatusVisuals,
 ): void {
-  const badges: Array<{ path: string; activeUntil: number; flashUntil: number }> = [];
+  const badges: Array<{
+    path?: string;
+    kind?: "harden";
+    activeUntil: number;
+    flashUntil: number;
+  }> = [];
   if (states.poison) {
     badges.push({
       path: uiSprites.debuffPoison,
@@ -2523,6 +2731,13 @@ function drawBarStatusBadges(
       flashUntil: states.burn.tickFlashUntil,
     });
   }
+  if (states.harden) {
+    badges.push({
+      kind: "harden",
+      activeUntil: states.harden.activeUntil,
+      flashUntil: states.harden.tickFlashUntil,
+    });
+  }
   if (badges.length === 0) {
     return;
   }
@@ -2533,7 +2748,11 @@ function drawBarStatusBadges(
   let iconX = x + w / 2 - totalW / 2;
   const iconY = y + h - 1;
   for (const badge of badges) {
-    drawDebuffBadge(iconX, iconY, size, badge.path, badge.activeUntil, badge.flashUntil, now);
+    if (badge.kind === "harden") {
+      drawHardenBadge(iconX, iconY, size, badge.activeUntil, badge.flashUntil, now);
+    } else if (badge.path) {
+      drawDebuffBadge(iconX, iconY, size, badge.path, badge.activeUntil, badge.flashUntil, now);
+    }
     iconX += size + gap;
   }
 }
@@ -2554,6 +2773,44 @@ function drawDebuffBadge(
   ctx.shadowColor = `rgba(255, 239, 180, ${0.18 + flashAlpha * 0.22})`;
   ctx.shadowBlur = 10;
   drawSprite(path, x, y, size, size, Math.max(3, size * 0.2));
+  ctx.restore();
+}
+
+function drawHardenBadge(
+  x: number,
+  y: number,
+  size: number,
+  activeUntil: number,
+  flashUntil: number,
+  now: number,
+): void {
+  const activeAlpha = Math.max(0, Math.min(1, (activeUntil - now) / 1450));
+  const flashAlpha = Math.max(0, Math.min(1, (flashUntil - now) / 320));
+  ctx.save();
+  ctx.globalAlpha = 0.78 + activeAlpha * 0.18;
+  ctx.shadowColor = `rgba(255, 239, 180, ${0.12 + flashAlpha * 0.22})`;
+  ctx.shadowBlur = 8;
+  drawSprite(uiSprites.debuffHarden, x, y, size, size, 0);
+  ctx.restore();
+}
+
+function drawEnemyHardenShell(
+  x: number,
+  y: number,
+  size: number,
+  state: EnemyHardenState,
+  now: number,
+): void {
+  const activeAlpha = Math.max(0, Math.min(1, (state.activeUntil - now) / 1450));
+  const flashAlpha = Math.max(0, Math.min(1, (state.tickFlashUntil - now) / 520));
+  const shellW = size * 1.18;
+  const shellH = size * 1.18;
+
+  ctx.save();
+  ctx.globalAlpha = 0.46 + activeAlpha * 0.28 + flashAlpha * 0.2;
+  ctx.shadowColor = `rgba(243, 225, 171, ${0.12 + flashAlpha * 0.18})`;
+  ctx.shadowBlur = 10 + flashAlpha * 8;
+  drawSprite(uiSprites.hardenShell, x - shellW / 2, y - shellH / 2, shellW, shellH, 0);
   ctx.restore();
 }
 

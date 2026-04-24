@@ -54,6 +54,22 @@ export function validateContent(content: GameContent): GameContent {
     if (enemy.maxHp <= 0 || enemy.attack < 0 || enemy.attackSpeed <= 0 || enemy.armor < 0) {
       throw new Error(`Enemy ${enemy.id} has invalid combat numbers.`);
     }
+    for (const trait of enemy.traits ?? []) {
+      if (trait.type === "harden") {
+        if (
+          trait.cooldownMs <= 0 ||
+          trait.durationMs <= 0 ||
+          trait.armorBonus <= 0 ||
+          (trait.initialDelayMs !== undefined && trait.initialDelayMs < 0)
+        ) {
+          throw new Error(`Enemy ${enemy.id} has invalid harden trait.`);
+        }
+      } else {
+        throw new Error(
+          `Enemy ${enemy.id} has unsupported trait ${(trait as { type: string }).type}.`,
+        );
+      }
+    }
   }
 
   const itemIds = new Set(parsed.items.map((item) => item.id));
@@ -721,6 +737,15 @@ export const defaultContent = validateContent({
       attack: 14,
       attackSpeed: 0.36,
       armor: 2,
+      traits: [
+        {
+          type: "harden",
+          initialDelayMs: 1600,
+          cooldownMs: 5400,
+          durationMs: 2600,
+          armorBonus: 18,
+        },
+      ],
     },
     {
       id: "slime_veteran",
@@ -860,10 +885,7 @@ export const defaultContent = validateContent({
     {
       id: "w5",
       name: "矿心 Boss",
-      enemies: [
-        { enemyId: "boss", count: 1 },
-        { enemyId: "imp", count: 1 },
-      ],
+      enemies: [{ enemyId: "boss", count: 1 }],
       rewardBias: 1.2,
     },
     {

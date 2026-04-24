@@ -82,6 +82,25 @@ export interface PendingFusion {
   instanceIds: string[];
 }
 
+export type EnemyTraitDef = {
+  type: "harden";
+  cooldownMs: number;
+  durationMs: number;
+  armorBonus: number;
+  initialDelayMs?: number;
+};
+
+export type EnemyTraitType = EnemyTraitDef["type"];
+
+export interface EnemyTraitState {
+  type: EnemyTraitType;
+  active: boolean;
+  startedAtMs: number;
+  activeUntilMs: number;
+  nextTriggerMs: number;
+  triggerCount: number;
+}
+
 export interface EnemyDef {
   id: string;
   name: string;
@@ -91,6 +110,7 @@ export interface EnemyDef {
   attack: number;
   attackSpeed: number;
   armor: number;
+  traits?: EnemyTraitDef[];
 }
 
 export interface WaveEnemyDef {
@@ -125,6 +145,7 @@ export interface EnemyInstance {
   hp: number;
   attackTimerMs: number;
   lane: number;
+  traitStates: EnemyTraitState[];
 }
 
 export interface DamageTotals {
@@ -178,6 +199,26 @@ export type CombatEvent =
       enemyLane: number;
       enemySlot: number;
       amount: number;
+    }
+  | {
+      id: number;
+      timeMs: number;
+      type: "enemyTraitStart";
+      enemyId: string;
+      enemyDefId: string;
+      enemyLane: number;
+      enemySlot: number;
+      traitType: EnemyTraitType;
+    }
+  | {
+      id: number;
+      timeMs: number;
+      type: "enemyTraitEnd";
+      enemyId: string;
+      enemyDefId: string;
+      enemyLane: number;
+      enemySlot: number;
+      traitType: EnemyTraitType;
     }
   | {
       id: number;
