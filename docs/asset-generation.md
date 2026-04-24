@@ -55,6 +55,65 @@ node tools/cut-effect-sheet.mjs \
   --key 00ff00 --tolerance 92 --feather 40 --trim-edge 0 --no-crop
 ```
 
+Enemy actor sheets use the same export pipeline. Generate every enemy as a
+right-facing source sheet, then mirror it in the runtime when enemies stand on
+the right side of the arena. This keeps the prompt simple and avoids the model
+mixing left/right attack direction between frames.
+
+Preferred enemy layout:
+
+- `4 x 4` equal cells
+- row 1: idle, starting from a natural standing/resting pose
+- row 2: attack, frame 1 must still read as a natural transition out of idle
+- row 3: hit reaction, frame 1 should begin from the normal silhouette before
+  recoiling away from the incoming attack
+- row 4: death, no generic explosion; use a monster-specific collapse, dissolve,
+  crumble, melt, or fall
+- object stays centered with stable foot/ground contact across all rows
+- square cells, generous head/weapon margin, flat chroma-key background, and
+  featherable edges
+
+Split the cut `16` frame strip into row strips before interpolation:
+
+```bash
+node tools/split-strip-rows.mjs \
+  --input public/assets/actors/actions/base/slime-actions-strip-16x256.png \
+  --output-dir public/assets/actors/actions/base \
+  --prefix slime \
+  --names idle,attack,hit,death \
+  --columns 4 --rows 4 --frame-width 256 --frame-height 256
+```
+
+Current enemy action strips are interpolated to `13` frames per action. Runtime
+draw code stabilizes enemy animation horizontally from each frame's lower-body
+alpha anchor and vertically from the visible bottom edge, so source sheets should
+still keep foot/ground contact consistent and avoid large body jumps inside the
+cell.
+
+Enemy attack presentation is serialized in the web client: battle simulation
+pauses while a hero or enemy attack animation is active. Melee enemies can lunge
+to the hero and return; ranged enemies use projectile sprites. Current ranged
+projectile source:
+
+- source sheet: `public/assets/effects/source/projectiles-3x1-blue-v1.png`
+- cut output: `public/assets/effects/projectiles-strip-3x256.png`
+- cells: slime toxic glob, imp firebolt, boss molten ore shard
+- key: pure blue `#0000ff`
+
+Frame interpolation:
+
+```bash
+node tools/interpolate-strip-rife.mjs \
+  --input public/assets/actors/hero-attack-strip-24x256.png \
+  --output public/assets/actors/hero-attack-strip-47x256.png \
+  --frames 24 --frame-width 256 --frame-height 256 \
+  --rife .tools/rife/rife-ncnn-vulkan-20221029-macos/rife-ncnn-vulkan \
+  --model .tools/rife/rife-ncnn-vulkan-20221029-macos/rife-v4.6
+```
+
+RIFE is run on RGB frames and alpha masks separately, then recombined into a
+transparent PNG strip. This avoids losing alpha in the interpolation step.
+
 Example prompt shape:
 
 ```text

@@ -133,14 +133,14 @@ export const defaultContent = validateContent({
       symbol: "SW",
       rarity: "common",
       tags: ["weapon", "metal"],
-      stats: { attack: 6 },
+      stats: { attack: 8 },
       effects: [
         {
           type: "adjacentTag",
           tag: "poison",
           stat: "attack",
-          amount: 2,
-          label: "贴毒瓶 +2 攻击",
+          amount: 3,
+          label: "贴毒瓶 +3 攻击",
         },
       ],
       description: "稳定的起手武器，靠近毒系物品会更凶。",
@@ -221,14 +221,14 @@ export const defaultContent = validateContent({
       symbol: "DG",
       rarity: "uncommon",
       tags: ["weapon", "metal"],
-      stats: { attack: 4, attackSpeed: 0.25 },
+      stats: { attack: 6, attackSpeed: 0.14 },
       effects: [
         {
           type: "adjacentTag",
           tag: "poison",
           stat: "attack",
-          amount: 3,
-          label: "贴毒系 +3 攻击",
+          amount: 4,
+          label: "贴毒系 +4 攻击",
         },
       ],
       description: "需要毒瓶配合的高速武器。",
@@ -239,14 +239,14 @@ export const defaultContent = validateContent({
       symbol: "GE",
       rarity: "uncommon",
       tags: ["metal", "machine"],
-      stats: { attackSpeed: 0.35 },
+      stats: { attackSpeed: 0.18 },
       effects: [
         {
           type: "adjacentTag",
           tag: "weapon",
           stat: "attackSpeed",
-          amount: 0.1,
-          label: "贴武器 +0.1 攻速",
+          amount: 0.06,
+          label: "贴武器 +0.06 攻速",
         },
       ],
       description: "把慢武器推到离谱频率。",
@@ -310,14 +310,14 @@ export const defaultContent = validateContent({
       symbol: "DR",
       rarity: "rare",
       tags: ["trinket", "sound"],
-      stats: { attackSpeed: 0.25 },
+      stats: { attackSpeed: 0.14 },
       effects: [
         {
           type: "sameRowTag",
           tag: "weapon",
           stat: "attackSpeed",
-          amount: 0.12,
-          label: "同行武器 +0.12 攻速",
+          amount: 0.07,
+          label: "同行武器 +0.07 攻速",
         },
       ],
       description: "武器排成一列时爆发明显。",
@@ -345,7 +345,7 @@ export const defaultContent = validateContent({
       symbol: "BC",
       rarity: "rare",
       tags: ["curse"],
-      stats: { attack: 12, regen: -0.35 },
+      stats: { attack: 12, regen: -0.25 },
       effects: [
         {
           type: "lowHp",
@@ -399,7 +399,7 @@ export const defaultContent = validateContent({
       symbol: "BS",
       rarity: "epic",
       tags: ["curse", "trinket"],
-      stats: { attack: 8, critChance: 0.12, maxHp: -10 },
+      stats: { attack: 8, critChance: 0.12, maxHp: -6 },
       effects: [
         {
           type: "adjacentTag",
@@ -417,7 +417,7 @@ export const defaultContent = validateContent({
       symbol: "VG",
       rarity: "uncommon",
       tags: ["poison", "nature"],
-      stats: { poison: 3, attackSpeed: 0.1 },
+      stats: { poison: 3, attackSpeed: 0.05 },
       effects: [
         {
           type: "adjacentTag",
@@ -453,7 +453,7 @@ export const defaultContent = validateContent({
       symbol: "PI",
       rarity: "epic",
       tags: ["poison", "curse", "trinket"],
-      stats: { poison: 8, maxHp: -8 },
+      stats: { poison: 8, maxHp: -5 },
       effects: [
         {
           type: "adjacentTag",
@@ -507,7 +507,7 @@ export const defaultContent = validateContent({
       symbol: "CH",
       rarity: "rare",
       tags: ["weapon", "metal", "machine"],
-      stats: { attack: 10, attackSpeed: 0.35 },
+      stats: { attack: 13, attackSpeed: 0.2 },
       effects: [
         {
           type: "adjacentTag",
@@ -525,14 +525,14 @@ export const defaultContent = validateContent({
       symbol: "SZ",
       rarity: "epic",
       tags: ["machine", "sound", "trinket"],
-      stats: { attackSpeed: 0.55, attack: 4 },
+      stats: { attackSpeed: 0.26, attack: 7 },
       effects: [
         {
           type: "sameRowTag",
           tag: "weapon",
           stat: "attackSpeed",
-          amount: 0.18,
-          label: "同行武器 +0.18 攻速",
+          amount: 0.1,
+          label: "同行武器 +0.1 攻速",
         },
       ],
       description: "机械武器终点，越多武器排队越响。",
@@ -595,13 +595,13 @@ export const defaultContent = validateContent({
       symbol: "AC",
       rarity: "epic",
       tags: ["trinket", "glass"],
-      stats: { attackSpeed: 0.4, critChance: 0.1 },
+      stats: { attackSpeed: 0.22, critChance: 0.1 },
       effects: [
         {
           type: "corner",
           stat: "attackSpeed",
-          amount: 0.2,
-          label: "角落 +0.2 攻速",
+          amount: 0.1,
+          label: "角落 +0.1 攻速",
         },
       ],
       description: "星象流顶级件，只在角落真正醒来。",
@@ -612,7 +612,7 @@ export const defaultContent = validateContent({
       symbol: "LC",
       rarity: "epic",
       tags: ["curse", "trinket"],
-      stats: { attack: 18, maxHp: -18, critChance: 0.08 },
+      stats: { attack: 18, maxHp: -12, critChance: 0.08 },
       effects: [
         {
           type: "sameRowTag",
@@ -699,7 +699,7 @@ export const defaultContent = validateContent({
       symbol: "SL",
       maxHp: 32,
       attack: 5,
-      attackSpeed: 0.34,
+      attackSpeed: 0.24,
       armor: 0,
     },
     {
@@ -708,7 +708,7 @@ export const defaultContent = validateContent({
       symbol: "RT",
       maxHp: 30,
       attack: 4,
-      attackSpeed: 0.55,
+      attackSpeed: 0.34,
       armor: 0,
     },
     {
@@ -717,7 +717,7 @@ export const defaultContent = validateContent({
       symbol: "IM",
       maxHp: 54,
       attack: 8,
-      attackSpeed: 0.44,
+      attackSpeed: 0.3,
       armor: 1,
     },
     {
@@ -726,24 +726,24 @@ export const defaultContent = validateContent({
       symbol: "BR",
       maxHp: 88,
       attack: 12,
-      attackSpeed: 0.3,
+      attackSpeed: 0.22,
       armor: 2,
     },
     {
       id: "boss",
       name: "矿心首领",
       symbol: "BO",
-      maxHp: 180,
-      attack: 14,
-      attackSpeed: 0.36,
-      armor: 2,
+      maxHp: 480,
+      attack: 18,
+      attackSpeed: 0.25,
+      armor: 3,
       traits: [
         {
           type: "harden",
-          initialDelayMs: 1600,
-          cooldownMs: 5400,
+          initialDelayMs: 1800,
+          cooldownMs: 4800,
           durationMs: 2600,
-          armorBonus: 18,
+          armorBonus: 22,
         },
       ],
     },
@@ -754,7 +754,7 @@ export const defaultContent = validateContent({
       spriteId: "slime",
       maxHp: 54,
       attack: 7,
-      attackSpeed: 0.38,
+      attackSpeed: 0.26,
       armor: 1,
     },
     {
@@ -764,7 +764,7 @@ export const defaultContent = validateContent({
       spriteId: "rat",
       maxHp: 48,
       attack: 5,
-      attackSpeed: 0.6,
+      attackSpeed: 0.36,
       armor: 0,
     },
     {
@@ -774,7 +774,7 @@ export const defaultContent = validateContent({
       spriteId: "imp",
       maxHp: 76,
       attack: 10,
-      attackSpeed: 0.48,
+      attackSpeed: 0.32,
       armor: 2,
     },
     {
@@ -784,7 +784,7 @@ export const defaultContent = validateContent({
       spriteId: "brute",
       maxHp: 124,
       attack: 14,
-      attackSpeed: 0.32,
+      attackSpeed: 0.23,
       armor: 4,
     },
     {
@@ -792,10 +792,10 @@ export const defaultContent = validateContent({
       name: "熔炉督军",
       symbol: "BF",
       spriteId: "boss",
-      maxHp: 260,
-      attack: 19,
-      attackSpeed: 0.37,
-      armor: 5,
+      maxHp: 1300,
+      attack: 18,
+      attackSpeed: 0.2,
+      armor: 8,
     },
     {
       id: "slime_elder",
@@ -804,7 +804,7 @@ export const defaultContent = validateContent({
       spriteId: "slime",
       maxHp: 88,
       attack: 9,
-      attackSpeed: 0.44,
+      attackSpeed: 0.3,
       armor: 2,
     },
     {
@@ -814,7 +814,7 @@ export const defaultContent = validateContent({
       spriteId: "rat",
       maxHp: 78,
       attack: 8,
-      attackSpeed: 0.68,
+      attackSpeed: 0.4,
       armor: 1,
     },
     {
@@ -824,7 +824,7 @@ export const defaultContent = validateContent({
       spriteId: "imp",
       maxHp: 118,
       attack: 13,
-      attackSpeed: 0.52,
+      attackSpeed: 0.34,
       armor: 3,
     },
     {
@@ -834,7 +834,7 @@ export const defaultContent = validateContent({
       spriteId: "brute",
       maxHp: 205,
       attack: 18,
-      attackSpeed: 0.35,
+      attackSpeed: 0.25,
       armor: 6,
     },
     {
@@ -842,10 +842,10 @@ export const defaultContent = validateContent({
       name: "矿心灾厄",
       symbol: "BC",
       spriteId: "boss",
-      maxHp: 470,
+      maxHp: 2500,
       attack: 24,
-      attackSpeed: 0.4,
-      armor: 8,
+      attackSpeed: 0.18,
+      armor: 12,
     },
   ],
   waves: [
@@ -929,11 +929,7 @@ export const defaultContent = validateContent({
     {
       id: "w10",
       name: "熔炉 Boss",
-      enemies: [
-        { enemyId: "boss_forge", count: 1 },
-        { enemyId: "brute_veteran", count: 1 },
-        { enemyId: "imp_veteran", count: 1 },
-      ],
+      enemies: [{ enemyId: "boss_forge", count: 1 }],
       rewardBias: 2.15,
     },
     {
@@ -976,11 +972,7 @@ export const defaultContent = validateContent({
     {
       id: "w15",
       name: "矿心灾厄",
-      enemies: [
-        { enemyId: "boss_core", count: 1 },
-        { enemyId: "brute_elder", count: 1 },
-        { enemyId: "imp_elder", count: 1 },
-      ],
+      enemies: [{ enemyId: "boss_core", count: 1 }],
       rewardBias: 3.1,
     },
   ],

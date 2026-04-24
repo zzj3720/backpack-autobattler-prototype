@@ -1,7 +1,10 @@
 # Combat Effect Assets
 
 - `*-strip-8.png`: early raw imagegen outputs. These are not the preferred long-term source format.
-- `*-strip-8x256.png`: runtime-ready horizontal sprite sheets with `8` frames at `256x256`.
+- `*-strip-8x256.png`: keyed base horizontal sprite sheets with `8` frames at `256x256`.
+- `*-strip-15x256.png`: runtime-ready RIFE-interpolated sheets with `15` frames at `256x256`.
+- `projectiles-strip-3x256.png`: three single-frame ranged attack projectiles: slime spit,
+  imp firebolt, and boss ore shard.
 - `manifest.json`: file list and usage hints for runtime integration.
 - `tools/cut-effect-sheet.mjs`: slicer for equal-cell effect sheets on a flat chroma background.
 
@@ -31,4 +34,9 @@ node tools/cut-effect-sheet.mjs \
   --key ff00ff --tolerance 60 --feather 24 --crop-padding 6 --trim-edge 24
 ```
 
-Use the standardized strips for direct frame animation in the web client. Keep raw sources only as re-export material.
+Use the interpolated strips for direct frame animation in the web client. Keep raw sources only as re-export material.
+
+## Interpolation
+
+RIFE does not preserve transparency directly in this pipeline. Use `tools/interpolate-strip-rife.mjs`
+so the color frames and alpha frames are interpolated separately, then recombined into an RGBA strip.

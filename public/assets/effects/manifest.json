@@ -1,14 +1,16 @@
 {
   "version": 1,
-  "notes": "Runtime strips are exported from equal-cell chroma-key source sheets with feathered keying and edge cleanup.",
+  "notes": "Runtime strips are exported from equal-cell chroma-key source sheets, then interpolated with RIFE while preserving alpha.",
   "effects": {
     "hitSpark": {
       "sourceSheet": "/assets/effects/source/hit-spark-sheet-8x1-magenta-v2.png",
-      "standardized": "/assets/effects/hit-spark-strip-8x256.png",
+      "standardized": "/assets/effects/hit-spark-strip-15x256.png",
       "layout": "horizontal",
-      "frames": 8,
+      "frames": 15,
       "frameWidth": 256,
       "frameHeight": 256,
+      "baseFrames": 8,
+      "baseStrip": "/assets/effects/hit-spark-strip-8x256.png",
       "key": "ff00ff",
       "tolerance": 60,
       "feather": 24,
@@ -17,11 +19,13 @@
     },
     "poisonPuff": {
       "sourceSheet": "/assets/effects/source/poison-puff-sheet-8x1-magenta-v2.png",
-      "standardized": "/assets/effects/poison-puff-strip-8x256.png",
+      "standardized": "/assets/effects/poison-puff-strip-15x256.png",
       "layout": "horizontal",
-      "frames": 8,
+      "frames": 15,
       "frameWidth": 256,
       "frameHeight": 256,
+      "baseFrames": 8,
+      "baseStrip": "/assets/effects/poison-puff-strip-8x256.png",
       "key": "ff00ff",
       "tolerance": 60,
       "feather": 24,
@@ -30,16 +34,31 @@
     },
     "fusionGlow": {
       "sourceSheet": "/assets/effects/source/fusion-glow-sheet-8x1-magenta-v2.png",
-      "standardized": "/assets/effects/fusion-glow-strip-8x256.png",
+      "standardized": "/assets/effects/fusion-glow-strip-15x256.png",
       "layout": "horizontal",
-      "frames": 8,
+      "frames": 15,
       "frameWidth": 256,
       "frameHeight": 256,
+      "baseFrames": 8,
+      "baseStrip": "/assets/effects/fusion-glow-strip-8x256.png",
       "key": "ff00ff",
       "tolerance": 60,
       "feather": 24,
       "trimEdge": 24,
       "usage": ["fusion", "loot-pulse"]
+    },
+    "projectiles": {
+      "sourceSheet": "/assets/effects/source/projectiles-3x1-blue-v1.png",
+      "standardized": "/assets/effects/projectiles-strip-3x256.png",
+      "layout": "horizontal",
+      "frames": 3,
+      "frameWidth": 256,
+      "frameHeight": 256,
+      "key": "0000ff",
+      "tolerance": 70,
+      "feather": 28,
+      "trimEdge": 4,
+      "usage": ["slime-spit", "imp-firebolt", "boss-ore-shard"]
     }
   }
 }

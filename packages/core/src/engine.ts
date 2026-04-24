@@ -28,9 +28,9 @@ import {
 } from "./types.ts";
 
 const BASE_STATS: Stats = {
-  maxHp: 80,
-  attack: 9,
-  attackSpeed: 0.55,
+  maxHp: 90,
+  attack: 12,
+  attackSpeed: 0.4,
   armor: 0,
   regen: 0,
   burn: 0,
@@ -46,7 +46,7 @@ const RARITY_WEIGHT: Record<Rarity, number> = {
   epic: 0.65,
 };
 const MAX_COMBAT_EVENTS = 80;
-const DOT_INTERVAL_MS = 900;
+const DOT_INTERVAL_MS = 1200;
 
 const STARTER_ITEMS = [
   { itemId: "wooden_shield", x: 0, y: 1 },
@@ -194,11 +194,13 @@ export function tickGame(state: GameState, deltaMs: number, content = defaultCon
 
   updateEnemyTraits(state, content);
 
+  let directAttackResolved = false;
   state.combat.playerAttackTimerMs -= deltaMs;
-  while (state.combat.playerAttackTimerMs <= 0 && state.enemies.length > 0) {
+  if (state.combat.playerAttackTimerMs <= 0 && state.enemies.length > 0) {
     playerAttack(state, build, content);
     state.combat.playerAttackTimerMs += 1000 / build.stats.attackSpeed;
     removeDeadEnemies(state);
+    directAttackResolved = true;
   }
 
   state.combat.dotTimerMs -= deltaMs;
@@ -215,10 +217,16 @@ export function tickGame(state: GameState, deltaMs: number, content = defaultCon
     }
     const enemyDef = getEnemyDef(content, enemy.defId);
     enemy.attackTimerMs -= deltaMs;
-    while (enemy.attackTimerMs <= 0 && enemy.hp > 0 && state.phase === "battle") {
+    if (
+      !directAttackResolved &&
+      enemy.attackTimerMs <= 0 &&
+      enemy.hp > 0 &&
+      state.phase === "battle"
+    ) {
       enemyAttack(state, enemy, enemyDef, build, content);
       enemy.attackTimerMs += 1000 / enemyDef.attackSpeed;
       removeDeadEnemies(state);
+      directAttackResolved = true;
     }
   }
 
@@ -1016,7 +1024,7 @@ function completeWave(state: GameState, content: GameContent): void {
   state.phase = "draft";
   state.waveTimeMs = 0;
   syncPlayerStats(state, content, false);
-  state.player.hp = clamp(state.player.hp + state.player.maxHp * 0.22, 0, state.player.maxHp);
+  state.player.hp = clamp(state.player.hp + state.player.maxHp * 0.32, 0, state.player.maxHp);
   generateRewards(state, content);
 }
 
@@ -1147,7 +1155,7 @@ function clampStats(stats: Stats, allowZeroMaxHp = false): Stats {
   return {
     maxHp: allowZeroMaxHp ? stats.maxHp : Math.max(1, stats.maxHp),
     attack: allowZeroMaxHp ? stats.attack : Math.max(1, stats.attack),
-    attackSpeed: clamp(stats.attackSpeed, allowZeroMaxHp ? 0 : 0.2, 6),
+    attackSpeed: clamp(stats.attackSpeed, allowZeroMaxHp ? 0 : 0.2, 2.2),
     armor: allowZeroMaxHp ? stats.armor : Math.max(0, stats.armor),
     regen: stats.regen,
     burn: allowZeroMaxHp ? stats.burn : Math.max(0, stats.burn),

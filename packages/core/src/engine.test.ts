@@ -153,10 +153,10 @@ describe("backpack core", () => {
     const state = createGame("boss-trait", traitContent);
     dispatchCommand(state, { type: "startBattle" }, traitContent);
 
-    tickGame(state, 1500, traitContent);
+    tickGame(state, 1750, traitContent);
     assert.equal(state.enemies[0]!.traitStates[0]!.active, false);
 
-    tickGame(state, 150, traitContent);
+    tickGame(state, 100, traitContent);
     assert.equal(state.enemies[0]!.traitStates[0]!.active, true);
     let events = querySnapshot(state, traitContent).combatEvents;
     assert.ok(
@@ -169,6 +169,26 @@ describe("backpack core", () => {
     assert.ok(
       events.some((event) => event.type === "enemyTraitEnd" && event.traitType === "harden"),
     );
+  });
+
+  it("emits at most one direct attack event per battle tick", () => {
+    const state = createGame("attack-queue");
+    dispatchCommand(state, { type: "startBattle" });
+    state.combat.playerAttackTimerMs = 0;
+    for (const enemy of state.enemies) {
+      enemy.attackTimerMs = 0;
+    }
+    const eventStart = state.combatEvents.length;
+
+    tickGame(state, 50);
+
+    const directAttackEvents = state.combatEvents
+      .slice(eventStart)
+      .filter(
+        (event) =>
+          (event.type === "damage" && event.kind === "attack") || event.type === "enemyAttack",
+      );
+    assert.equal(directAttackEvents.length, 1);
   });
 
   it("caps every wave at three enemies for stable battle staging", () => {

@@ -2,6 +2,7 @@ import {
   GRID_HEIGHT,
   GRID_WIDTH,
   createGame,
+  defaultContent,
   dispatchCommand,
   querySnapshot,
   tickGame,
@@ -134,27 +135,32 @@ interface StripDef {
 
 const actorAnimationStrips: Record<string, StripDef> = {
   heroAttack: {
-    path: "/assets/actors/hero-attack-strip-24x256.png",
-    frameCount: 24,
-    frameWidth: 256,
-    frameHeight: 256,
-    anchorBottom: true,
-  },
-  bossAttack: {
-    path: "/assets/actors/boss-attack-strip-6x256.png",
-    frameCount: 6,
-    frameWidth: 256,
-    frameHeight: 256,
-    anchorBottom: true,
-  },
-  bossHit: {
-    path: "/assets/actors/boss-hit-strip-6x256.png",
-    frameCount: 6,
+    path: "/assets/actors/hero-attack-strip-47x256.png",
+    frameCount: 47,
     frameWidth: 256,
     frameHeight: 256,
     anchorBottom: true,
   },
 };
+type EnemyActionName = "idle" | "attack" | "hit" | "death";
+const enemyActionBase = "/assets/actors/actions";
+const enemyAnimationStrips: Record<string, Record<EnemyActionName, StripDef>> = Object.fromEntries(
+  ["slime", "rat", "imp", "brute", "boss"].map((spriteId) => [
+    spriteId,
+    Object.fromEntries(
+      (["idle", "attack", "hit", "death"] as const).map((action) => [
+        action,
+        {
+          path: `${enemyActionBase}/${spriteId}-${action}-strip-13x256.png`,
+          frameCount: 13,
+          frameWidth: 256,
+          frameHeight: 256,
+          anchorBottom: true,
+        },
+      ]),
+    ) as Record<EnemyActionName, StripDef>,
+  ]),
+) as Record<string, Record<EnemyActionName, StripDef>>;
 const backgroundSprite = "/assets/backgrounds/dungeon-arena-clean-v1.png";
 const uiBase = "/assets/ui";
 const effectsBase = "/assets/effects";
@@ -220,20 +226,26 @@ const rewardCardSprites: Record<Rarity, { normal: string; hover: string }> = {
 };
 const effectStrips: Record<string, StripDef> = {
   hitSpark: {
-    path: `${effectsBase}/hit-spark-strip-8x256.png`,
-    frameCount: 8,
+    path: `${effectsBase}/hit-spark-strip-15x256.png`,
+    frameCount: 15,
     frameWidth: 256,
     frameHeight: 256,
   },
   poisonPuff: {
-    path: `${effectsBase}/poison-puff-strip-8x256.png`,
-    frameCount: 8,
+    path: `${effectsBase}/poison-puff-strip-15x256.png`,
+    frameCount: 15,
     frameWidth: 256,
     frameHeight: 256,
   },
   fusionGlow: {
-    path: `${effectsBase}/fusion-glow-strip-8x256.png`,
-    frameCount: 8,
+    path: `${effectsBase}/fusion-glow-strip-15x256.png`,
+    frameCount: 15,
+    frameWidth: 256,
+    frameHeight: 256,
+  },
+  projectiles: {
+    path: `${effectsBase}/projectiles-strip-3x256.png`,
+    frameCount: 3,
     frameWidth: 256,
     frameHeight: 256,
   },
@@ -346,8 +358,11 @@ const actorSpriteBoundsCache = new Map<string, SpriteBounds>();
 const ACTOR_FILTER =
   "drop-shadow(0 0 2px rgba(0, 0, 0, 0.9)) drop-shadow(0 6px 5px rgba(0, 0, 0, 0.58))";
 interface FrameBounds {
+  left: number;
+  right: number;
   top: number;
   bottom: number;
+  anchorX: number;
 }
 
 interface SpriteBounds {
@@ -360,6 +375,7 @@ interface SpriteBounds {
 interface StripBoundsCacheEntry {
   frames: FrameBounds[];
   maxBottom: number;
+  anchorX: number;
 }
 
 const stripBoundsCache = new Map<string, StripBoundsCacheEntry>();
@@ -403,6 +419,7 @@ interface ActorDrawOptions {
   scaleX?: number;
   scaleY?: number;
   alpha?: number;
+  stabilizeX?: boolean;
 }
 
 interface FloatingText {
@@ -433,18 +450,14 @@ interface EnemyHitEffect {
 interface EnemyAttackEffect {
   id: number;
   enemyId: string;
-  startedAt: number;
-  durationMs: number;
-}
-
-interface StrikeEffect {
-  id: number;
+  spriteId: string;
+  style: EnemyAttackStyle;
+  base: Point;
   from: Point;
   to: Point;
-  color: string;
+  projectileFrame: number;
   startedAt: number;
   durationMs: number;
-  critical: boolean;
 }
 
 interface HeroAttackEffect {
@@ -455,6 +468,7 @@ interface HeroAttackEffect {
   critical: boolean;
 }
 type SpriteStripDef = StripDef;
+type EnemyAttackStyle = "melee" | "projectile";
 type DamageCombatEvent = Extract<GameSnapshot["combatEvents"][number], { type: "damage" }>;
 
 interface AnimatedSpriteEffect {
@@ -470,6 +484,19 @@ interface AnimatedSpriteEffect {
   lift: number;
   blendMode: GlobalCompositeOperation;
   anchorCell?: Point;
+}
+
+interface EnemyDeathEffect {
+  id: number;
+  enemyId: string;
+  spriteId: string;
+  enemyName: string;
+  x: number;
+  groundY: number;
+  size: number;
+  startedAt: number;
+  deathStartedAt: number;
+  durationMs: number;
 }
 
 interface DeferredVisualAction {
@@ -491,6 +518,12 @@ interface EnemyBurnState {
 interface EnemyHardenState {
   activeUntil: number;
   tickFlashUntil: number;
+}
+
+interface VisualHp {
+  current: number;
+  queued: number;
+  max: number;
 }
 
 type BarThemeName = "player" | "enemy";
@@ -528,6 +561,11 @@ let canvasScale = 1;
 
 let state: GameState = createGame(dailySeed());
 let snapshot: GameSnapshot = querySnapshot(state);
+let playerVisualHp: VisualHp = {
+  current: snapshot.player.hp,
+  queued: snapshot.player.hp,
+  max: snapshot.player.maxHp,
+};
 let paused = false;
 let lastFrame = performance.now();
 let accumulatorMs = 0;
@@ -538,17 +576,20 @@ let battleBannerUntilMs = 0;
 let backpackVisualY = BAG_OPEN_Y;
 let landscapeLockRequested = false;
 let lastCombatEventId = 0;
+let combatVisualCursorMs = 0;
 let screenShakeUntil = 0;
 let screenShakeStrength = 0;
 const floatingTexts: FloatingText[] = [];
 const enemyHitEffects = new Map<string, EnemyHitEffect>();
 const enemyAttackEffects: EnemyAttackEffect[] = [];
 const itemPulseUntil = new Map<string, number>();
-const strikeEffects: StrikeEffect[] = [];
 const heroAttackEffects: HeroAttackEffect[] = [];
+const enemyDeathEffects: EnemyDeathEffect[] = [];
 const arenaSpriteEffects: AnimatedSpriteEffect[] = [];
 const uiSpriteEffects: AnimatedSpriteEffect[] = [];
 const deferredVisualActions: DeferredVisualAction[] = [];
+const damageImpactByTarget = new Map<string, number>();
+const enemyVisualHp = new Map<string, VisualHp>();
 const enemyPoisonStates = new Map<string, EnemyPoisonState>();
 const enemyBurnStates = new Map<string, EnemyBurnState>();
 const enemyHardenFlashUntil = new Map<string, number>();
@@ -579,7 +620,7 @@ canvas.addEventListener("pointerdown", (event) => {
   pointer = pointerFromEvent(event);
 
   const item = itemAt(pointer.x, pointer.y);
-  if (item && state.phase === "draft") {
+  if (item && currentDisplayPhase() === "draft") {
     draggingItemId = item.instance.id;
     capturePointer(event.pointerId);
     return;
@@ -637,15 +678,9 @@ function frame(now: number): void {
   const delta = Math.min(120, now - lastFrame);
   lastFrame = now;
 
-  if (!paused && state.phase === "battle") {
-    accumulatorMs += delta;
-    while (accumulatorMs >= 50) {
-      tickGame(state, 50);
-      accumulatorMs -= 50;
-    }
-  }
+  advanceBattle(now, delta);
 
-  const targetBagY = state.phase === "draft" ? BAG_OPEN_Y : BAG_CLOSED_Y;
+  const targetBagY = currentDisplayPhase(now) === "draft" ? BAG_OPEN_Y : BAG_CLOSED_Y;
   backpackVisualY += (targetBagY - backpackVisualY) * Math.min(1, delta / 170);
   if (Math.abs(backpackVisualY - targetBagY) < 0.5) {
     backpackVisualY = targetBagY;
@@ -655,6 +690,19 @@ function frame(now: number): void {
   requestAnimationFrame(frame);
 }
 
+function advanceBattle(now: number, delta: number): void {
+  if (paused || state.phase !== "battle") {
+    accumulatorMs = 0;
+    return;
+  }
+
+  accumulatorMs += delta;
+  while (accumulatorMs >= 50 && state.phase === "battle") {
+    tickGame(state, 50);
+    accumulatorMs -= 50;
+  }
+}
+
 function render(): void {
   syncCanvasScale();
   snapshot = querySnapshot(state);
@@ -662,9 +710,11 @@ function render(): void {
   consumeCombatEvents(now);
   flushDeferredVisualActions(now);
   pruneCombatVisuals(now);
+  syncVisualHpFromSnapshot(now);
   hitZones = [];
+  const displayPhase = currentDisplayPhase(now);
   const hoveredItem =
-    !draggingItemId && snapshot.phase === "draft" ? itemAt(pointer.x, pointer.y) : null;
+    !draggingItemId && displayPhase === "draft" ? itemAt(pointer.x, pointer.y) : null;
   ctx.clearRect(0, 0, WIDTH, HEIGHT);
   drawBackground();
   drawHeader();
@@ -718,7 +768,7 @@ function drawHeader(): void {
 
 function drawBackpack(hoveredItem: ItemSnapshot | null): void {
   const bagY = backpackVisualY;
-  const open = snapshot.phase === "draft";
+  const open = currentDisplayPhase() === "draft";
   drawBackpackBody(BAG_X, bagY, BAG_W, BAG_H, open);
 
   if (!open) {
@@ -770,7 +820,7 @@ function drawBackpack(hoveredItem: ItemSnapshot | null): void {
 
 function drawFusionHints(): void {
   const previews = snapshot.fusionPreviews.filter((preview) => !preview.queued);
-  if (snapshot.phase !== "draft" || previews.length === 0) {
+  if (currentDisplayPhase() !== "draft" || previews.length === 0) {
     return;
   }
 
@@ -793,7 +843,7 @@ function drawFusionHints(): void {
 
 function drawFusionCellCues(): void {
   const previews = snapshot.fusionPreviews.filter((preview) => !preview.queued);
-  if (snapshot.phase !== "draft" || previews.length === 0) {
+  if (currentDisplayPhase() !== "draft" || previews.length === 0) {
     return;
   }
 
@@ -827,7 +877,7 @@ function drawFusionCellCue(x: number, y: number, alpha: number): void {
 
 function drawFusionNotice(): void {
   const previews = snapshot.fusionPreviews.filter((preview) => !preview.queued);
-  if (snapshot.phase !== "draft" || previews.length === 0) {
+  if (currentDisplayPhase() !== "draft" || previews.length === 0) {
     return;
   }
 
@@ -872,7 +922,7 @@ function drawItemLinkHighlights(item: ItemSnapshot): void {
 }
 
 function drawRewardChoices(): void {
-  if (snapshot.phase !== "draft" || snapshot.rewards.length === 0) {
+  if (currentDisplayPhase() !== "draft" || snapshot.rewards.length === 0) {
     return;
   }
 
@@ -894,7 +944,7 @@ function drawArena(): void {
 }
 
 function drawBattleBanner(): void {
-  if (snapshot.phase !== "battle" || performance.now() > battleBannerUntilMs) {
+  if (currentDisplayPhase() !== "battle" || performance.now() > battleBannerUntilMs) {
     return;
   }
   const alpha = Math.max(0, Math.min(1, (battleBannerUntilMs - performance.now()) / 850));
@@ -935,12 +985,12 @@ function drawPlayer(x: number, y: number): void {
     barY,
     playerBarW,
     38,
-    snapshot.player.hp / snapshot.player.maxHp,
+    playerVisualHp.current / playerVisualHp.max,
     "player",
     now,
   );
   text(
-    `${Math.ceil(snapshot.player.hp)} / ${Math.ceil(snapshot.player.maxHp)}`,
+    `${Math.ceil(playerVisualHp.current)} / ${Math.ceil(playerVisualHp.max)}`,
     position.x,
     barY + 17,
     13,
@@ -964,8 +1014,8 @@ function drawEnemies(): void {
     const x = ENEMY_AREA.slotX + order * ENEMY_AREA.slotGapX;
     const y = ENEMY_AREA.topY + laneIndex * ENEMY_AREA.laneGapY;
     const spriteId = enemy.def.spriteId ?? enemy.def.id;
-    const size = spriteId === "boss" ? 158 : 116;
-    const renderSize = size + (spriteId === "boss" ? 24 : 0);
+    const size = enemyBaseSize(spriteId);
+    const renderSize = enemyRenderSize(spriteId);
     const hit = enemyHitEffects.get(enemy.instance.id);
     const attack = currentEnemyAttack(enemy.instance.id, now);
     const poisonState = enemyPoisonStates.get(enemy.instance.id);
@@ -981,20 +1031,21 @@ function drawEnemies(): void {
             tickFlashUntil: hardenFlashUntil,
           }
         : null;
-    const hitAlpha = hit ? Math.max(0, Math.min(1, (hit.until - now) / 240)) : 0;
-    const hitBoost = hitAlpha * (hit?.critical ? 12 : 6);
+    const hitAlpha = hit ? Math.max(0, Math.min(1, (hit.until - now) / 360)) : 0;
+    const hitBoost = hitAlpha * (hit?.critical ? 10 : 5);
     const groundY = y + size * 0.42;
-    drawActorShadow(x, groundY, size, 22);
+    const position = enemyAttackPosition({ x, y: groundY }, spriteId, attack, now);
+    drawActorShadow(position.x, position.y, size, 22);
     const animated =
-      spriteId === "boss" &&
-      (drawEnemyBossAttackFrame(attack, x, groundY, renderSize, now) ||
-        drawEnemyBossHitFrame(hit, x, groundY, renderSize + hitBoost, now));
+      drawEnemyAttackFrame(spriteId, attack, position.x, position.y, renderSize, now) ||
+      drawEnemyHitFrame(spriteId, hit, position.x, position.y, renderSize + hitBoost, now) ||
+      drawEnemyIdleFrame(spriteId, position.x, position.y, renderSize, now);
     if (
       !animated &&
       !drawAnchoredActorSprite(
         actorSprites[spriteId],
-        x,
-        groundY,
+        position.x,
+        position.y,
         renderSize + hitBoost,
         renderSize + hitBoost,
       )
@@ -1002,44 +1053,42 @@ function drawEnemies(): void {
       text(enemy.def.symbol, x, y - 10, 13, "#fff4df", "center", "monospace");
     }
     if (hardenState) {
-      drawEnemyHardenShell(x, groundY - size * 0.44, size, hardenState, now);
+      drawEnemyHardenShell(position.x, position.y - size * 0.44, size, hardenState, now);
     }
     if (poisonState && poisonState.activeUntil > now) {
-      drawEnemyPoisonMotes(x, groundY - size * 0.44, size, poisonState, now);
+      drawEnemyPoisonMotes(position.x, position.y - size * 0.44, size, poisonState, now);
     }
     if (burnState && burnState.activeUntil > now) {
-      drawEnemyBurnMotes(x, groundY - size * 0.38, size, burnState, now);
+      drawEnemyBurnMotes(position.x, position.y - size * 0.38, size, burnState, now);
     }
     const enemyBarW = spriteId === "boss" ? 224 : 190;
     const enemyBarH = spriteId === "boss" ? 34 : 28;
-    const barX = x - enemyBarW / 2;
-    const barY = groundY + 2;
-    drawLookupText("enemy", enemy.def.name, x, barY - 18, {
+    const barX = position.x - enemyBarW / 2;
+    const barY = position.y + 2;
+    const hp = enemyVisualHpForDisplay(
+      enemy.instance.id,
+      enemy.def.id,
+      enemy.instance.hp,
+      enemy.def.maxHp,
+    );
+    drawLookupText("enemy", enemy.def.name, position.x, barY - 18, {
       align: "center",
       scale: spriteId === "boss" ? 0.78 : 0.7,
       maxWidth: enemyBarW - 18,
     });
-    drawHealthBar(
-      barX,
-      barY,
-      enemyBarW,
-      enemyBarH,
-      enemy.instance.hp / enemy.def.maxHp,
-      "enemy",
-      now,
-      {
-        poison: poisonState?.activeUntil && poisonState.activeUntil > now ? poisonState : null,
-        burn: burnState?.activeUntil && burnState.activeUntil > now ? burnState : null,
-        harden: hardenState,
-      },
-    );
+    drawHealthBar(barX, barY, enemyBarW, enemyBarH, hp.current / hp.max, "enemy", now, {
+      poison: poisonState?.activeUntil && poisonState.activeUntil > now ? poisonState : null,
+      burn: burnState?.activeUntil && burnState.activeUntil > now ? burnState : null,
+      harden: hardenState,
+    });
   }
 }
 
 function drawSidePanel(): void {
   const primaryX = BAG_X + BAG_W / 2 + 42;
   const secondaryX = BAG_X + BAG_W / 2 - 210;
-  if (snapshot.phase === "draft") {
+  const displayPhase = currentDisplayPhase();
+  if (displayPhase === "draft") {
     const y = backpackVisualY + BAG_H - 74;
     button(primaryX, y, 170, 42, "敲响战鼓", () => {
       const phaseBefore = state.phase;
@@ -1050,7 +1099,7 @@ function drawSidePanel(): void {
       }
     });
     button(secondaryX, y + 2, 142, 38, "重启远征", restartRun);
-  } else if (snapshot.phase === "battle") {
+  } else if (displayPhase === "battle") {
     button(
       BAG_X + BAG_W / 2 - 85,
       backpackVisualY + 18,
@@ -1065,7 +1114,7 @@ function drawSidePanel(): void {
     button(BAG_X + BAG_W / 2 - 85, backpackVisualY + 18, 170, 38, "重启远征", restartRun);
   }
 
-  if (snapshot.phase === "victory" || snapshot.phase === "defeat") {
+  if (displayPhase === "victory" || displayPhase === "defeat") {
     drawResultCard();
     return;
   }
@@ -1120,6 +1169,7 @@ function consumeCombatEvents(now: number): void {
 function handleCombatEvent(event: GameSnapshot["combatEvents"][number], now: number): void {
   switch (event.type) {
     case "waveStart":
+      const waveStartAt = nextCombatVisualStart(now);
       addFloatingText({
         id: event.id,
         x: WIDTH / 2,
@@ -1129,13 +1179,15 @@ function handleCombatEvent(event: GameSnapshot["combatEvents"][number], now: num
         color: "#f3d18a",
         size: 22,
         outline: "rgba(34, 17, 8, 0.85)",
-        startedAt: now,
+        startedAt: waveStartAt,
         durationMs: 780,
         spriteKey: "ui.waveStart",
       });
       return;
 
     case "waveClear":
+      const waveClearAt = nextCombatVisualStart(now);
+      extendCombatVisualCursor(waveClearAt + 980);
       addFloatingText({
         id: event.id,
         x: WIDTH / 2,
@@ -1145,7 +1197,7 @@ function handleCombatEvent(event: GameSnapshot["combatEvents"][number], now: num
         color: "#dfffe7",
         size: 24,
         outline: "rgba(18, 32, 23, 0.9)",
-        startedAt: now,
+        startedAt: waveClearAt,
         durationMs: 980,
         spriteKey: "ui.waveClear",
       });
@@ -1153,26 +1205,47 @@ function handleCombatEvent(event: GameSnapshot["combatEvents"][number], now: num
 
     case "damage": {
       const point = enemyPoint(event.targetLane, event.targetSlot);
+      const hp = reserveEnemyDamage(event);
       if (event.kind === "attack") {
-        const attack = addHeroAttack(point, now, event.critical, event.id);
+        const attack = addHeroAttack(point, nextCombatVisualStart(now), event.critical, event.id);
+        extendCombatVisualCursor(attack.startedAt + attack.durationMs);
         const impactAt = heroAttackImpactAt(attack);
+        damageImpactByTarget.set(event.targetId, impactAt);
         queueDeferredVisualAction({
           id: event.id,
           triggerAt: impactAt,
           run: () => {
+            applyVisualDamage(hp, event.amount);
             emitDamageVisuals(event, point, impactAt);
           },
         });
       } else {
-        emitDamageVisuals(event, point, now);
+        const startedAt = nextCombatVisualStart(now);
+        damageImpactByTarget.set(event.targetId, startedAt);
+        queueDeferredVisualAction({
+          id: event.id,
+          triggerAt: startedAt,
+          run: () => {
+            applyVisualDamage(hp, event.amount);
+            emitDamageVisuals(event, point, startedAt);
+          },
+        });
       }
       return;
     }
 
     case "enemyAttack": {
+      const spriteId = enemySpriteIdFromDefId(event.enemyDefId);
       const point = enemyPoint(event.enemyLane, event.enemySlot);
+      const base = {
+        x: point.x,
+        y: point.y + enemyBaseSize(spriteId) * 0.42,
+      };
+      const from = {
+        x: point.x - enemyRenderSize(spriteId) * 0.34,
+        y: base.y - enemyRenderSize(spriteId) * 0.48,
+      };
       const emitEnemyImpact = (impactAt: number): void => {
-        addStrike(point, HERO_DAMAGE_POINT, "#ff7474", impactAt, false, event.id);
         addFloatingText({
           id: event.id,
           x: HERO_DAMAGE_POINT.x + jitter(event.id, 20),
@@ -1192,18 +1265,25 @@ function handleCombatEvent(event: GameSnapshot["combatEvents"][number], now: num
         });
         bumpScreenShake(impactAt, 4, 140);
       };
-      if (event.enemyDefId.includes("boss")) {
-        const attack = addEnemyAttack(event.enemyId, now, event.id);
-        queueDeferredVisualAction({
-          id: event.id,
-          triggerAt: enemyAttackImpactAt(attack),
-          run: () => {
-            emitEnemyImpact(enemyAttackImpactAt(attack));
-          },
-        });
-      } else {
-        emitEnemyImpact(now);
-      }
+      const hp = reservePlayerDamage(event.amount);
+      const attack = addEnemyAttack(
+        event.enemyId,
+        spriteId,
+        base,
+        from,
+        HERO_DAMAGE_POINT,
+        nextCombatVisualStart(now),
+        event.id,
+      );
+      extendCombatVisualCursor(attack.startedAt + attack.durationMs);
+      queueDeferredVisualAction({
+        id: event.id,
+        triggerAt: enemyAttackImpactAt(attack),
+        run: () => {
+          applyVisualDamage(hp, event.amount);
+          emitEnemyImpact(enemyAttackImpactAt(attack));
+        },
+      });
       return;
     }
 
@@ -1223,33 +1303,18 @@ function handleCombatEvent(event: GameSnapshot["combatEvents"][number], now: num
     }
 
     case "kill": {
-      const point = enemyPoint(event.targetLane, event.targetSlot);
-      addArenaSpriteEffect({
-        id: event.id,
-        strip: effectStrips.hitSpark,
-        x: point.x,
-        y: point.y,
-        startedAt: now,
-        durationMs: 320,
-        size: 176,
-        opacity: 0.88,
-        rotation: jitter(event.id + 71, Math.PI * 0.5),
-        lift: 0,
-        blendMode: "screen",
-      });
-      addFloatingText({
-        id: event.id,
-        x: point.x,
-        y: point.y - 86,
-        dx: 0,
-        value: "击破",
-        color: "#fff2c4",
-        size: 20,
-        outline: "rgba(24, 13, 4, 0.92)",
-        startedAt: now,
-        durationMs: 900,
-        spriteKey: "ui.kill",
-      });
+      const startAt = Math.max(
+        nextCombatVisualStart(now),
+        damageImpactByTarget.get(event.targetId) ?? now,
+      );
+      const deathEffect = addEnemyDeathEffect(event, now, startAt);
+      extendCombatVisualCursor(deathEffect.deathStartedAt + deathEffect.durationMs);
+      const run = () => emitKillVisuals(event, startAt, false);
+      if (startAt > now) {
+        queueDeferredVisualAction({ id: event.id, triggerAt: startAt, run });
+      } else {
+        emitKillVisuals(event, startAt);
+      }
       return;
     }
 
@@ -1294,23 +1359,107 @@ function queueDeferredVisualAction(action: DeferredVisualAction): void {
   deferredVisualActions.push(action);
 }
 
-function addStrike(
-  from: Point,
-  to: Point,
-  color: string,
-  now: number,
-  critical: boolean,
-  id: number,
-): void {
-  strikeEffects.push({
-    id,
-    from,
-    to,
-    color,
-    startedAt: now,
-    durationMs: critical ? 360 : 280,
-    critical,
-  });
+function syncVisualHpFromSnapshot(now: number): void {
+  playerVisualHp.max = snapshot.player.maxHp;
+  if (!hasPlayerHpPresentationPending(now)) {
+    playerVisualHp.current = snapshot.player.hp;
+    playerVisualHp.queued = snapshot.player.hp;
+  }
+
+  const liveEnemyIds = new Set<string>();
+  for (const enemy of snapshot.enemies) {
+    liveEnemyIds.add(enemy.instance.id);
+    const hp = enemyVisualHp.get(enemy.instance.id);
+    if (!hp) {
+      enemyVisualHp.set(enemy.instance.id, {
+        current: enemy.instance.hp,
+        queued: enemy.instance.hp,
+        max: enemy.def.maxHp,
+      });
+      continue;
+    }
+    hp.max = enemy.def.maxHp;
+    if (!hasEnemyHpPresentationPending(enemy.instance.id, now)) {
+      hp.current = enemy.instance.hp;
+      hp.queued = enemy.instance.hp;
+    }
+  }
+
+  for (const id of enemyVisualHp.keys()) {
+    if (!liveEnemyIds.has(id) && !enemyDeathEffects.some((effect) => effect.enemyId === id)) {
+      enemyVisualHp.delete(id);
+    }
+  }
+}
+
+function hasPlayerHpPresentationPending(now: number): boolean {
+  return (
+    enemyAttackEffects.some((effect) => now - effect.startedAt <= effect.durationMs) ||
+    deferredVisualActions.some((action) => action.triggerAt > now)
+  );
+}
+
+function hasEnemyHpPresentationPending(enemyId: string, now: number): boolean {
+  return (
+    heroAttackEffects.some((effect) => now - effect.startedAt <= effect.durationMs) ||
+    enemyDeathEffects.some(
+      (effect) =>
+        effect.enemyId === enemyId &&
+        now >= effect.startedAt &&
+        now - effect.deathStartedAt <= effect.durationMs,
+    ) ||
+    deferredVisualActions.some((action) => action.triggerAt > now)
+  );
+}
+
+function reservePlayerDamage(amount: number): VisualHp {
+  playerVisualHp.max = snapshot.player.maxHp;
+  if (playerVisualHp.queued < snapshot.player.hp) {
+    playerVisualHp.queued = playerVisualHp.current;
+  }
+  playerVisualHp.queued = Math.max(0, playerVisualHp.queued - amount);
+  return playerVisualHp;
+}
+
+function reserveEnemyDamage(event: DamageCombatEvent): VisualHp {
+  const live = snapshot.enemies.find((enemy) => enemy.instance.id === event.targetId);
+  const max = live?.def.maxHp ?? enemyMaxHp(event.targetDefId);
+  let hp = enemyVisualHp.get(event.targetId);
+  if (!hp) {
+    const current = Math.max(0, Math.min(max, (live?.instance.hp ?? 0) + event.amount));
+    hp = { current, queued: current, max };
+    enemyVisualHp.set(event.targetId, hp);
+  }
+  hp.max = max;
+  hp.queued = Math.max(0, hp.queued - event.amount);
+  return hp;
+}
+
+function applyVisualDamage(hp: VisualHp, amount: number): void {
+  hp.current = Math.max(0, hp.current - amount);
+}
+
+function enemyVisualHpForDisplay(
+  enemyId: string,
+  defId: string,
+  liveHp: number,
+  maxHp: number,
+): VisualHp {
+  let hp = enemyVisualHp.get(enemyId);
+  if (!hp) {
+    hp = { current: liveHp, queued: liveHp, max: maxHp };
+    enemyVisualHp.set(enemyId, hp);
+  }
+  hp.max = maxHp || enemyMaxHp(defId);
+  return hp;
+}
+
+function enemyMaxHp(defId: string): number {
+  return defaultContent.enemies.find((enemy) => enemy.id === defId)?.maxHp ?? 1;
+}
+
+function enemyNameFromDefId(defId: string): string {
+  return defaultContent.enemies.find((enemy) => enemy.id === defId)?.name ?? defId;
 }
 
 function addArenaSpriteEffect(effect: AnimatedSpriteEffect): void {
@@ -1331,7 +1480,7 @@ function emitDamageVisuals(event: DamageCombatEvent, point: Point, startedAt: nu
   if (event.kind === "attack" || event.kind === "thorns") {
     enemyHitEffects.set(event.targetId, {
       startedAt,
-      until: startedAt + (event.critical ? 360 : 250),
+      until: startedAt + (event.critical ? 520 : 420),
       critical: event.critical,
     });
   }
@@ -1387,8 +1536,64 @@ function emitDamageVisuals(event: DamageCombatEvent, point: Point, startedAt: nu
   }
 }
 
+function emitKillVisuals(
+  event: Extract<GameSnapshot["combatEvents"][number], { type: "kill" }>,
+  startedAt: number,
+  createDeathEffect = true,
+): void {
+  if (createDeathEffect) {
+    addEnemyDeathEffect(event, startedAt, startedAt);
+  }
+  const point = enemyPoint(event.targetLane, event.targetSlot);
+  enemyHitEffects.delete(event.targetId);
+  damageImpactByTarget.delete(event.targetId);
+  addFloatingText({
+    id: event.id,
+    x: point.x,
+    y: point.y - 86,
+    dx: 0,
+    value: "击破",
+    color: "#fff2c4",
+    size: 20,
+    outline: "rgba(24, 13, 4, 0.92)",
+    startedAt,
+    durationMs: 900,
+    spriteKey: "ui.kill",
+  });
+}
+
+function addEnemyDeathEffect(
+  event: Extract<GameSnapshot["combatEvents"][number], { type: "kill" }>,
+  visibleAt: number,
+  deathStartedAt: number,
+): EnemyDeathEffect {
+  const existing = enemyDeathEffects.find((effect) => effect.id === event.id);
+  if (existing) {
+    return existing;
+  }
+  const point = enemyPoint(event.targetLane, event.targetSlot);
+  const spriteId = enemySpriteIdFromDefId(event.targetDefId);
+  const size = enemyRenderSize(spriteId);
+  const effect = {
+    id: event.id,
+    enemyId: event.targetId,
+    spriteId,
+    enemyName: enemyNameFromDefId(event.targetDefId),
+    x: point.x,
+    groundY: point.y + enemyBaseSize(spriteId) * 0.42,
+    size,
+    startedAt: visibleAt,
+    deathStartedAt,
+    durationMs: spriteId === "boss" ? 1320 : 980,
+  };
+  enemyDeathEffects.push(effect);
+  return effect;
+}
+
 function drawCombatEffects(now: number): void {
-  drawStrikes(now);
+  drawEnemyDeathEffects(now);
+  drawEnemyAttackGhosts(now);
+  drawEnemyProjectiles(now);
   drawArenaSpriteEffects(now);
   drawFloatingTexts(now);
 }
@@ -1425,28 +1630,6 @@ function drawSpriteEffects(effects: AnimatedSpriteEffect[], now: number): void {
       effect.rotation,
     );
   }
-}
-
-function drawStrikes(now: number): void {
-  ctx.save();
-  ctx.lineCap = "round";
-  ctx.globalCompositeOperation = "screen";
-  for (const strike of strikeEffects) {
-    const progress = Math.max(0, Math.min(1, (now - strike.startedAt) / strike.durationMs));
-    const alpha = 1 - progress;
-    const head = easeOutCubic(progress);
-    const tail = Math.max(0, head - 0.28);
-    const start = lerpPoint(strike.from, strike.to, tail);
-    const end = lerpPoint(strike.from, strike.to, head);
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = strike.color;
-    ctx.lineWidth = strike.critical ? 8 : 5;
-    line(start.x, start.y, end.x, end.y);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.78)";
-    ctx.lineWidth = strike.critical ? 3 : 2;
-    line(start.x, start.y, end.x, end.y);
-  }
-  ctx.restore();
 }
 
 function drawFloatingTexts(now: number): void {
@@ -1514,9 +1697,9 @@ function drawClosedBagItemPulses(bagY: number): void {
 
 function pruneCombatVisuals(now: number): void {
   removeExpired(floatingTexts, (item) => now - item.startedAt <= item.durationMs);
-  removeExpired(strikeEffects, (item) => now - item.startedAt <= item.durationMs);
   removeExpired(heroAttackEffects, (item) => now - item.startedAt <= item.durationMs);
   removeExpired(enemyAttackEffects, (item) => now - item.startedAt <= item.durationMs);
+  removeExpired(enemyDeathEffects, (item) => now - item.deathStartedAt <= item.durationMs);
   removeExpired(arenaSpriteEffects, (item) => now - item.startedAt <= item.durationMs);
   removeExpired(uiSpriteEffects, (item) => now - item.startedAt <= item.durationMs);
   for (const [id, effect] of enemyHitEffects) {
@@ -1562,15 +1745,23 @@ function flushDeferredVisualActions(now: number): void {
 
 function clearCombatVisuals(): void {
   lastCombatEventId = 0;
+  combatVisualCursorMs = 0;
   screenShakeUntil = 0;
   screenShakeStrength = 0;
   floatingTexts.length = 0;
-  strikeEffects.length = 0;
   heroAttackEffects.length = 0;
   enemyAttackEffects.length = 0;
+  enemyDeathEffects.length = 0;
   arenaSpriteEffects.length = 0;
   uiSpriteEffects.length = 0;
   deferredVisualActions.length = 0;
+  damageImpactByTarget.clear();
+  enemyVisualHp.clear();
+  playerVisualHp = {
+    current: snapshot.player.hp,
+    queued: snapshot.player.hp,
+    max: snapshot.player.maxHp,
+  };
   enemyHitEffects.clear();
   enemyPoisonStates.clear();
   enemyBurnStates.clear();
@@ -1590,12 +1781,70 @@ function screenShakeOffset(now: number): Point {
   };
 }
 
-function addEnemyAttack(enemyId: string, now: number, id: number): EnemyAttackEffect {
-  const durationMs = 580;
+function currentDisplayPhase(now = performance.now()): GameSnapshot["phase"] {
+  if (snapshot.phase !== "battle" && hasCombatPresentationPending(now)) {
+    return "battle";
+  }
+  return snapshot.phase;
+}
+
+function nextCombatVisualStart(now: number): number {
+  return Math.max(now, combatVisualCursorMs);
+}
+
+function extendCombatVisualCursor(until: number): void {
+  combatVisualCursorMs = Math.max(combatVisualCursorMs, until);
+}
+
+function hasCombatPresentationPending(now: number): boolean {
+  if (combatVisualCursorMs > now) {
+    return true;
+  }
+  if (
+    heroAttackEffects.some(
+      (effect) => now >= effect.startedAt && now - effect.startedAt <= effect.durationMs,
+    )
+  ) {
+    return true;
+  }
+  if (
+    enemyAttackEffects.some(
+      (effect) => now >= effect.startedAt && now - effect.startedAt <= effect.durationMs,
+    )
+  ) {
+    return true;
+  }
+  if (
+    enemyDeathEffects.some(
+      (effect) => now >= effect.startedAt && now - effect.deathStartedAt <= effect.durationMs,
+    )
+  ) {
+    return true;
+  }
+  return deferredVisualActions.some((action) => action.triggerAt > now);
+}
+
+function addEnemyAttack(
+  enemyId: string,
+  spriteId: string,
+  base: Point,
+  from: Point,
+  to: Point,
+  now: number,
+  id: number,
+): EnemyAttackEffect {
+  const style = enemyAttackStyle(spriteId);
+  const durationMs = style === "projectile" ? 820 : 760;
   const previous = enemyAttackEffects.findLast((effect) => effect.enemyId === enemyId);
   const effect = {
     id,
     enemyId,
+    spriteId,
+    style,
+    base,
+    from,
+    to,
+    projectileFrame: enemyProjectileFrame(spriteId),
     startedAt: previous ? Math.max(now, previous.startedAt + previous.durationMs) : now,
     durationMs,
   };
@@ -1616,67 +1865,276 @@ function currentEnemyAttack(enemyId: string, now: number): EnemyAttackEffect | n
   return null;
 }
 
-function enemyAttackFrame(attack: EnemyAttackEffect | null, now: number): number {
-  if (!attack || now < attack.startedAt) {
-    return 0;
+function enemyAttackImpactAt(attack: EnemyAttackEffect): number {
+  return attack.startedAt + attack.durationMs * (attack.style === "projectile" ? 0.76 : 0.58);
+}
+
+function enemyAttackStyle(spriteId: string): EnemyAttackStyle {
+  return spriteId === "rat" || spriteId === "brute" ? "melee" : "projectile";
+}
+
+function enemyProjectileFrame(spriteId: string): number {
+  if (spriteId === "imp") {
+    return 1;
+  }
+  if (spriteId === "boss") {
+    return 2;
+  }
+  return 0;
+}
+
+function enemySpriteIdFromDefId(defId: string): string {
+  if (defId.includes("boss")) {
+    return "boss";
+  }
+  for (const spriteId of ["slime", "rat", "imp", "brute"]) {
+    if (defId.includes(spriteId)) {
+      return spriteId;
+    }
+  }
+  return defId;
+}
+
+function enemyBaseSize(spriteId: string): number {
+  return spriteId === "boss" ? 158 : 116;
+}
+
+function enemyRenderSize(spriteId: string): number {
+  const size = enemyBaseSize(spriteId);
+  return size + (spriteId === "boss" ? 24 : 0);
+}
+
+function enemyStrip(spriteId: string, action: EnemyActionName): SpriteStripDef | null {
+  return enemyAnimationStrips[spriteId]?.[action] ?? null;
+}
+
+function enemyActionFrame(
+  strip: SpriteStripDef,
+  startedAt: number,
+  durationMs: number,
+  now: number,
+): number {
+  const progress = Math.max(0, Math.min(1, (now - startedAt) / durationMs));
+  return frameForProgress(strip, progress);
+}
+
+function enemyAttackPosition(
+  base: Point,
+  spriteId: string,
+  attack: EnemyAttackEffect | null,
+  now: number,
+): Point {
+  if (!attack || attack.style !== "melee" || now < attack.startedAt) {
+    return base;
   }
   const progress = Math.max(0, Math.min(1, (now - attack.startedAt) / attack.durationMs));
-  const sequence = [0, 1, 2, 3, 4, 5, 5, 5];
-  return sequence[Math.min(sequence.length - 1, Math.floor(progress * sequence.length))] ?? 5;
+  const target = {
+    x: Math.max(HERO_ANCHOR.x + 142, Math.min(base.x - 112, HERO_ANCHOR.x + 190)),
+    y: HERO_ANCHOR.y + 42,
+  };
+  if (progress < 0.24) {
+    return base;
+  }
+  if (progress < 0.56) {
+    return lerpPoint(base, target, easeOutCubic((progress - 0.24) / 0.32));
+  }
+  if (progress < 0.68) {
+    const recoil =
+      Math.sin(((progress - 0.56) / 0.12) * Math.PI) * (spriteId === "brute" ? 18 : 10);
+    return { x: target.x - recoil, y: target.y };
+  }
+  return lerpPoint(target, base, easeOutCubic((progress - 0.68) / 0.32));
 }
 
-function enemyAttackImpactAt(attack: EnemyAttackEffect): number {
-  return attack.startedAt + attack.durationMs * (4 / 8);
-}
-
-function enemyHitFrame(hit: EnemyHitEffect | undefined, now: number): number {
-  if (!hit || now < hit.startedAt) {
+function enemyIdleFrame(spriteId: string, now: number): number {
+  const strip = enemyStrip(spriteId, "idle");
+  if (!strip) {
     return 0;
   }
-  const duration = Math.max(1, hit.until - hit.startedAt);
-  const progress = Math.max(0, Math.min(1, (now - hit.startedAt) / duration));
-  const sequence = [0, 1, 2, 3, 4, 5];
-  return sequence[Math.min(sequence.length - 1, Math.floor(progress * sequence.length))] ?? 5;
+  const loopMs = spriteId === "boss" ? 1320 : 1180;
+  const offset = stableSpriteOffset(spriteId);
+  const progress = ((now + offset) % loopMs) / loopMs;
+  return Math.max(0, Math.min(strip.frameCount - 1, Math.floor(progress * strip.frameCount)));
 }
 
-function drawEnemyBossAttackFrame(
+function stableSpriteOffset(spriteId: string): number {
+  let hash = 0;
+  for (let index = 0; index < spriteId.length; index += 1) {
+    hash = (hash * 31 + spriteId.charCodeAt(index)) % 997;
+  }
+  return hash;
+}
+
+function drawEnemyActionFrame(
+  spriteId: string,
+  action: EnemyActionName,
+  frame: number,
+  x: number,
+  groundY: number,
+  size: number,
+  alpha = 1,
+): boolean {
+  const strip = enemyStrip(spriteId, action);
+  if (!strip) {
+    return false;
+  }
+  return drawActorStripFrame(strip, frame, x, groundY - size / 2, size, size, {
+    alpha,
+    scaleX: -1,
+    stabilizeX: true,
+  });
+}
+
+function drawEnemyIdleFrame(
+  spriteId: string,
+  x: number,
+  groundY: number,
+  size: number,
+  now: number,
+): boolean {
+  return drawEnemyActionFrame(spriteId, "idle", enemyIdleFrame(spriteId, now), x, groundY, size);
+}
+
+function drawEnemyAttackFrame(
+  spriteId: string,
   attack: EnemyAttackEffect | null,
   x: number,
   groundY: number,
   size: number,
   now: number,
 ): boolean {
-  if (!attack) {
+  const strip = enemyStrip(spriteId, "attack");
+  if (!attack || !strip || now < attack.startedAt) {
     return false;
   }
-  return drawActorStripFrame(
-    actorAnimationStrips.bossAttack,
-    enemyAttackFrame(attack, now),
-    x,
-    groundY - size / 2,
-    size,
-    size,
-  );
+  const frame = enemyActionFrame(strip, attack.startedAt, attack.durationMs, now);
+  return drawActorStripFrame(strip, frame, x, groundY - size / 2, size, size, {
+    scaleX: -1,
+    stabilizeX: true,
+  });
 }
 
-function drawEnemyBossHitFrame(
+function drawEnemyHitFrame(
+  spriteId: string,
   hit: EnemyHitEffect | undefined,
   x: number,
   groundY: number,
   size: number,
   now: number,
 ): boolean {
-  if (!hit || hit.until <= now) {
+  const strip = enemyStrip(spriteId, "hit");
+  if (!hit || hit.until <= now || !strip) {
     return false;
   }
-  return drawActorStripFrame(
-    actorAnimationStrips.bossHit,
-    enemyHitFrame(hit, now),
-    x,
-    groundY - size / 2,
-    size,
-    size,
-  );
+  const duration = Math.max(1, hit.until - hit.startedAt);
+  const frame = enemyActionFrame(strip, hit.startedAt, duration, now);
+  return drawActorStripFrame(strip, frame, x, groundY - size / 2, size, size, {
+    scaleX: -1,
+    stabilizeX: true,
+  });
+}
+
+function drawEnemyPresentationBar(
+  spriteId: string,
+  enemyName: string,
+  x: number,
+  groundY: number,
+  hp: VisualHp | undefined,
+  now: number,
+): void {
+  if (!hp) {
+    return;
+  }
+  const enemyBarW = spriteId === "boss" ? 224 : 190;
+  const enemyBarH = spriteId === "boss" ? 34 : 28;
+  const barX = x - enemyBarW / 2;
+  const barY = groundY + 2;
+  drawLookupText("enemy", enemyName, x, barY - 18, {
+    align: "center",
+    scale: spriteId === "boss" ? 0.78 : 0.7,
+    maxWidth: enemyBarW - 18,
+  });
+  drawHealthBar(barX, barY, enemyBarW, enemyBarH, hp.current / hp.max, "enemy", now);
+}
+
+function drawEnemyDeathEffects(now: number): void {
+  for (const effect of enemyDeathEffects) {
+    if (now < effect.startedAt) {
+      continue;
+    }
+    const hp = enemyVisualHp.get(effect.enemyId);
+    drawEnemyPresentationBar(effect.spriteId, effect.enemyName, effect.x, effect.groundY, hp, now);
+    if (now < effect.deathStartedAt) {
+      drawActorShadow(effect.x, effect.groundY, effect.size * 0.78, 18);
+      drawEnemyIdleFrame(effect.spriteId, effect.x, effect.groundY, effect.size, now);
+      continue;
+    }
+    const strip = enemyStrip(effect.spriteId, "death");
+    if (!strip) {
+      continue;
+    }
+    const progress = Math.max(0, Math.min(1, (now - effect.deathStartedAt) / effect.durationMs));
+    const frame = frameForProgress(strip, progress);
+    const fade = progress < 0.82 ? 1 : Math.max(0, 1 - (progress - 0.82) / 0.18);
+    drawActorShadow(effect.x, effect.groundY, effect.size * 0.78, 18 * fade);
+    drawEnemyActionFrame(
+      effect.spriteId,
+      "death",
+      frame,
+      effect.x,
+      effect.groundY,
+      effect.size,
+      fade,
+    );
+  }
+}
+
+function drawEnemyAttackGhosts(now: number): void {
+  const liveEnemyIds = new Set(snapshot.enemies.map((enemy) => enemy.instance.id));
+  for (const attack of enemyAttackEffects) {
+    if (liveEnemyIds.has(attack.enemyId) || now < attack.startedAt) {
+      continue;
+    }
+    if (now - attack.startedAt > attack.durationMs) {
+      continue;
+    }
+    const size = enemyRenderSize(attack.spriteId);
+    const position = enemyAttackPosition(attack.base, attack.spriteId, attack, now);
+    drawActorShadow(position.x, position.y, enemyBaseSize(attack.spriteId), 20);
+    if (!drawEnemyAttackFrame(attack.spriteId, attack, position.x, position.y, size, now)) {
+      drawEnemyIdleFrame(attack.spriteId, position.x, position.y, size, now);
+    }
+  }
+}
+
+function drawEnemyProjectiles(now: number): void {
+  for (const attack of enemyAttackEffects) {
+    if (attack.style !== "projectile" || now < attack.startedAt) {
+      continue;
+    }
+    const progress = Math.max(0, Math.min(1, (now - attack.startedAt) / attack.durationMs));
+    const release = 0.34;
+    const impact = 0.76;
+    if (progress < release || progress > 0.9) {
+      continue;
+    }
+    const flightProgress = Math.max(0, Math.min(1, (progress - release) / (impact - release)));
+    const point = lerpPoint(attack.from, attack.to, easeInOutCubic(flightProgress));
+    const drift = Math.sin(flightProgress * Math.PI) * -18;
+    const size = attack.spriteId === "boss" ? 112 : attack.spriteId === "imp" ? 92 : 86;
+    const alpha = progress <= impact ? 1 : Math.max(0, 1 - (progress - impact) / 0.14);
+    drawSpriteFrame(
+      effectStrips.projectiles,
+      attack.projectileFrame,
+      point.x,
+      point.y + drift,
+      size * 1.55,
+      size,
+      alpha,
+      "screen",
+      0,
+    );
+  }
 }
 
 function addHeroAttack(
@@ -1716,10 +2174,11 @@ function heroAttackFrame(attack: HeroAttackEffect | null, now: number): number {
     return 0;
   }
   const progress = heroAttackProgress(attack, now);
-  const sequence = [
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 23, 23,
-  ];
-  return sequence[Math.min(sequence.length - 1, Math.floor(progress * sequence.length))] ?? 23;
+  return frameForProgress(actorAnimationStrips.heroAttack, progress);
+}
+
+function frameForProgress(strip: SpriteStripDef, progress: number): number {
+  return Math.max(0, Math.min(strip.frameCount - 1, Math.floor(progress * strip.frameCount)));
 }
 
 function heroAttackProgress(attack: HeroAttackEffect | null, now: number): number {
@@ -1808,6 +2267,10 @@ function lerpPoint(from: Point, to: Point, ratio: number): Point {
 
 function easeOutCubic(value: number): number {
   return 1 - (1 - value) ** 3;
+}
+
+function easeInOutCubic(value: number): number {
+  return value < 0.5 ? 4 * value ** 3 : 1 - (-2 * value + 2) ** 3 / 2;
 }
 
 function removeExpired<T>(items: T[], keep: (item: T) => boolean): void {
@@ -2942,6 +3405,9 @@ function preloadSprites(): void {
     ...Object.values(itemSprites),
     ...Object.values(actorSprites),
     ...Object.values(actorAnimationStrips).map((strip) => strip.path),
+    ...Object.values(enemyAnimationStrips).flatMap((strips) =>
+      Object.values(strips).map((strip) => strip.path),
+    ),
     ...Object.values(uiSprites),
     ...Object.values(labeledButtonSprites).flatMap((sprites) => [sprites.normal, sprites.pressed]),
     ...textSpriteImages,
@@ -3171,6 +3637,7 @@ function drawActorStripFrame(
   y: number,
   w: number,
   h: number,
+  options: ActorDrawOptions = {},
 ): boolean {
   const image = spriteCache.get(strip.path);
   if (!image?.complete || image.naturalWidth === 0) {
@@ -3179,20 +3646,39 @@ function drawActorStripFrame(
   const frameIndex = Math.max(0, Math.min(strip.frameCount - 1, frame));
   const sourceX = frameIndex * strip.frameWidth;
   let drawY = y;
+  let drawX = x;
   if (strip.anchorBottom) {
     const boundsEntry = getStripBounds(strip, image);
     const frameBounds = boundsEntry?.frames[frameIndex];
     if (frameBounds) {
       drawY += ((boundsEntry.maxBottom - frameBounds.bottom) / strip.frameHeight) * h;
+      if (options.stabilizeX) {
+        drawX +=
+          ((options.scaleX ?? 1) * (boundsEntry.anchorX - frameBounds.anchorX) * w) /
+          strip.frameWidth;
+      }
     }
   }
-  const cached = getActorStripFrameSurface(strip, image, frameIndex, w, h);
-  if (cached) {
-    ctx.drawImage(cached, x - cached.width / 2, drawY - cached.height / 2);
-    return true;
+  const hasTransform =
+    options.rotation ||
+    (options.scaleX ?? 1) !== 1 ||
+    (options.scaleY ?? 1) !== 1 ||
+    (options.alpha ?? 1) !== 1 ||
+    options.stabilizeX;
+  if (!hasTransform) {
+    const cached = getActorStripFrameSurface(strip, image, frameIndex, w, h);
+    if (cached) {
+      ctx.drawImage(cached, drawX - cached.width / 2, drawY - cached.height / 2);
+      return true;
+    }
   }
   ctx.save();
-  ctx.translate(x, drawY);
+  ctx.translate(drawX, drawY);
+  if (options.rotation) {
+    ctx.rotate(options.rotation);
+  }
+  ctx.scale(options.scaleX ?? 1, options.scaleY ?? 1);
+  ctx.globalAlpha = options.alpha ?? 1;
   ctx.filter = ACTOR_FILTER;
   ctx.drawImage(image, sourceX, 0, strip.frameWidth, strip.frameHeight, -w / 2, -h / 2, w, h);
   ctx.restore();
@@ -3217,10 +3703,13 @@ function getStripBounds(
   context.drawImage(image, 0, 0);
   const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
   const frames: FrameBounds[] = [];
+  const anchors: number[] = [];
   let maxBottom = 0;
 
   for (let frameIndex = 0; frameIndex < strip.frameCount; frameIndex += 1) {
     const frameStartX = frameIndex * strip.frameWidth;
+    let left = strip.frameWidth;
+    let right = -1;
     let top = strip.frameHeight;
     let bottom = -1;
 
@@ -3230,22 +3719,82 @@ function getStripBounds(
         if ((data[alphaIndex] ?? 0) <= 8) {
           continue;
         }
+        left = Math.min(left, px);
+        right = Math.max(right, px);
         top = Math.min(top, py);
         bottom = Math.max(bottom, py);
       }
     }
 
+    const resolvedLeft = left === strip.frameWidth ? 0 : left;
+    const resolvedRight = right < 0 ? strip.frameWidth - 1 : right;
+    const resolvedTop = top === strip.frameHeight ? 0 : top;
+    const resolvedBottom = bottom < 0 ? strip.frameHeight - 1 : bottom;
+    const anchorX = bottomBandAnchorX(
+      data,
+      canvas.width,
+      frameStartX,
+      strip.frameWidth,
+      strip.frameHeight,
+      resolvedTop,
+      resolvedBottom,
+    );
     const resolved = {
-      top: top === strip.frameHeight ? 0 : top,
-      bottom: bottom < 0 ? strip.frameHeight - 1 : bottom,
+      left: resolvedLeft,
+      right: resolvedRight,
+      top: resolvedTop,
+      bottom: resolvedBottom,
+      anchorX,
     };
     frames.push(resolved);
+    anchors.push(anchorX);
     maxBottom = Math.max(maxBottom, resolved.bottom);
   }
 
-  const entry = { frames, maxBottom };
+  const entry = { frames, maxBottom, anchorX: median(anchors) };
   stripBoundsCache.set(strip.path, entry);
   return entry;
+}
+
+function bottomBandAnchorX(
+  data: Uint8ClampedArray<ArrayBufferLike>,
+  canvasWidth: number,
+  frameStartX: number,
+  frameWidth: number,
+  frameHeight: number,
+  top: number,
+  bottom: number,
+): number {
+  const height = Math.max(1, bottom - top + 1);
+  const bandStart = Math.max(top, bottom - Math.max(12, Math.floor(height * 0.32)));
+  let weightedX = 0;
+  let alphaTotal = 0;
+  for (let py = bandStart; py <= bottom; py += 1) {
+    for (let px = 0; px < frameWidth; px += 1) {
+      const alpha = data[(py * canvasWidth + frameStartX + px) * 4 + 3] ?? 0;
+      if (alpha <= 8) {
+        continue;
+      }
+      weightedX += px * alpha;
+      alphaTotal += alpha;
+    }
+  }
+  if (alphaTotal <= 0) {
+    return frameWidth / 2;
+  }
+  return weightedX / alphaTotal;
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) {
+    return 0;
+  }
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) {
+    return sorted[middle] ?? 0;
+  }
+  return ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
 }
 
 function getSpriteBounds(path: string, image: HTMLImageElement): SpriteBounds | null {
